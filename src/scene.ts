@@ -30,7 +30,7 @@ export function createScene(canvas: HTMLCanvasElement): { engine: Engine; scene:
 
   // Directional light for shadows and depth
   const dirLight = new DirectionalLight('dirLight', new Vector3(-1, -2, -1), scene)
-  dirLight.intensity = 0.7
+  dirLight.intensity = 0.55
   dirLight.diffuse = new Color3(1, 0.98, 0.95)
 
   return { engine, scene }
