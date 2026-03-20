@@ -60,8 +60,8 @@ PALETTE = {
     10: hex_to_srgb("#FFFF00"),  # Yellow
     11: hex_to_srgb("#00716B"),  # Blue/green
     12: hex_to_srgb("#27FFF5"),  # Turquoise
-    13: hex_to_srgb("#4a7a2a"),  # Forest floor green (wood base)
-    14: hex_to_srgb("#7a3a20"),  # Terracotta clay (brick base)
+    13: hex_to_srgb("#5d9435"),  # Forest floor green (wood base)
+    14: hex_to_srgb("#9e4a28"),  # Terracotta clay (brick base)
     15: hex_to_srgb("#808080"),  # Medium gray (ore base)
 }
 
