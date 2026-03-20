@@ -1,4 +1,4 @@
-import { Scene, PBRMaterial, Color3, SceneLoader, Mesh } from '@babylonjs/core'
+import { Scene, PBRMaterial, Color3, SceneLoader, Mesh, Vector3 } from '@babylonjs/core'
 import '@babylonjs/loaders/STL'
 import { HexTile, TileType } from './types'
 import { axialToWorld } from './board'
@@ -37,6 +37,9 @@ function hexColorToColor3(hex: string): Color3 {
 // Cache for loaded STL meshes (one per tile type)
 const meshCache: Map<TileType, Mesh> = new Map()
 
+// Target radius for a tile to fit within a hex cell
+const TARGET_TILE_DIAMETER = 4.0 // ~2.0 unit radius → 4.0 diameter
+
 async function loadTileMesh(scene: Scene, tileType: TileType): Promise<Mesh> {
   const cached = meshCache.get(tileType)
   if (cached) {
@@ -46,6 +49,29 @@ async function loadTileMesh(scene: Scene, tileType: TileType): Promise<Mesh> {
   const stlFile = TILE_STL_MAP[tileType]
   const result = await SceneLoader.ImportMeshAsync('', '/assets/', stlFile, scene)
   const mesh = result.meshes[0] as Mesh
+
+  // STL files from 3D printing are typically Z-up; Babylon.js is Y-up.
+  // Rotate -90° around X to convert Z-up → Y-up (flat on XZ plane).
+  mesh.rotation = new Vector3(-Math.PI / 2, 0, 0)
+  // Bake the rotation into vertices so clones inherit correct geometry
+  mesh.bakeCurrentTransformIntoVertices()
+
+  // Compute bounding box and auto-scale to fit within hex cell
+  mesh.refreshBoundingInfo()
+  const bounds = mesh.getBoundingInfo().boundingBox
+  const extents = bounds.maximumWorld.subtract(bounds.minimumWorld)
+  // Use the largest horizontal dimension (X or Z) to determine scale
+  const maxHorizontal = Math.max(extents.x, extents.z)
+  const scaleFactor = maxHorizontal > 0 ? TARGET_TILE_DIAMETER / maxHorizontal : 1
+  mesh.scaling.setAll(scaleFactor)
+  mesh.bakeCurrentTransformIntoVertices()
+
+  // Re-center the mesh so its bounding box center sits at the origin
+  mesh.refreshBoundingInfo()
+  const newBounds = mesh.getBoundingInfo().boundingBox
+  const center = newBounds.centerWorld
+  mesh.position = new Vector3(-center.x, -center.y, -center.z)
+  mesh.bakeCurrentTransformIntoVertices()
 
   // Hide the original - we'll clone it
   mesh.setEnabled(false)
@@ -100,11 +126,6 @@ export async function renderTiles(scene: Scene, tiles: HexTile[]): Promise<void>
     instance.position.x = x
     instance.position.z = z
     instance.position.y = 0
-
-    // Scale to fit hex grid
-    // STL hex is radius=1.0, we want them to tile at spacing 2.1
-    // so scale ~1.05 to nearly touch
-    instance.scaling.setAll(1.05)
 
     // Apply material
     instance.material = getOrCreateMaterial(scene, tile.type)
