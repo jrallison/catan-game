@@ -24,7 +24,7 @@ export function createScene(canvas: HTMLCanvasElement): { engine: Engine; scene:
 
   // Hemispheric light for ambient fill
   const hemiLight = new HemisphericLight('hemiLight', new Vector3(0, 1, 0), scene)
-  hemiLight.intensity = 0.6
+  hemiLight.intensity = 0.45
   hemiLight.diffuse = new Color3(1, 1, 1)
   hemiLight.groundColor = new Color3(0.5, 0.5, 0.55) // warm shadow fill — softens dark areas without washing out depth
 
