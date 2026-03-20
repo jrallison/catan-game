@@ -15,7 +15,7 @@ async function main(): Promise<void> {
   await renderTiles(scene, board)
 
   // Render number tokens on land tiles
-  renderNumberTokens(scene, board)
+  await renderNumberTokens(scene, board)
 
   // Start render loop
   engine.runRenderLoop(() => scene.render())
