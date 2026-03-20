@@ -37,18 +37,18 @@ def hex_to_linear(h):
 # Index matches the number system in the PDF (1–12).
 
 PALETTE = {
-    1:  "#E8602C",  # Orange
-    2:  "#E8D5A0",  # Beige
-    3:  "#6B4423",  # Brown
-    4:  "#CC2200",  # Red
-    5:  "#C8961E",  # Gold
-    6:  "#7FBF3F",  # Light green
-    7:  "#F5F5F5",  # White
-    8:  "#3A7A3A",  # Green
-    9:  "#6B7C8C",  # Grey
-    10: "#F0C820",  # Yellow
-    11: "#1A6FA8",  # Blue/green
-    12: "#20B0C0",  # Turquoise
+    1:  "#FF6600",  # Orange       — exact pixel from PDF swatch
+    2:  "#D9CF74",  # Beige        — exact pixel from PDF swatch
+    3:  "#CC6600",  # Brown        — exact pixel from PDF swatch
+    4:  "#C00000",  # Red          — exact pixel from PDF swatch
+    5:  "#FFCC00",  # Gold         — exact pixel from PDF swatch
+    6:  "#66FF33",  # Light green  — exact pixel from PDF swatch
+    7:  "#FFFFFF",  # White        — exact pixel from PDF swatch
+    8:  "#009900",  # Green        — exact pixel from PDF swatch
+    9:  "#BFBFBF",  # Grey         — exact pixel from PDF swatch
+    10: "#FFFF00",  # Yellow       — exact pixel from PDF swatch
+    11: "#00716B",  # Blue/green   — exact pixel from PDF swatch
+    12: "#27FFF5",  # Turquoise    — exact pixel from PDF swatch
 }
 
 def p(n):
