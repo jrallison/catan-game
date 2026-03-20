@@ -155,13 +155,13 @@ TILE_PART_COLORS = {
 
 # Landscape base colors: one base.stl per tile type, different colors
 LANDSCAPE_BASE_COLORS = {
-    "base_brick":   1,   # orange
-    "base_wool":    7,   # white
-    "base_wood":    3,   # brown
-    "base_ore":     9,   # grey
-    "base_wheet":   10,  # yellow
-    "base_desert":  5,   # gold
-    "base_water":   11,  # blue/green
+    "base_brick":   14,  # terracotta — matches brick tile base (#9e4a28)
+    "base_wool":    6,   # light green — matches wool tile base (#66FF33)
+    "base_wood":    13,  # forest green — matches wood tile base (#5d9435)
+    "base_ore":     15,  # medium gray — matches ore tile base (#808080)
+    "base_wheet":   16,  # darker gold — matches wheet tile base (#E6B200)
+    "base_desert":  17,  # brightened desert — matches desert tile base (#FFD966)
+    "base_water":   11,  # blue/green — unchanged
 }
 
 
