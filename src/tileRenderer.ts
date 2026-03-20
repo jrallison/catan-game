@@ -417,7 +417,9 @@ function placeTileInstance(scene: Scene, tile: HexTile, template: Mesh): void {
 
   instance.material = getOrCreateMaterial(scene, tile.type)
 
-  // Place landscape base ring at same position — outer ring fills gap between tiles
+  // Place landscape base ring at same position — outer ring fills gap between tiles.
+  // Base GLBs are pointy-top (Z extent > X extent); terrain tiles are flat-top.
+  // Rotate base 30° (π/6) around Y to align orientations.
   const baseTemplate = baseTemplateCache.get(tile.type)
   if (baseTemplate) {
     const baseInstance = baseTemplate.clone(`base_${tile.q}_${tile.r}`)
@@ -425,7 +427,7 @@ function placeTileInstance(scene: Scene, tile: HexTile, template: Mesh): void {
       baseInstance.setEnabled(true)
       baseInstance.parent = null
       baseInstance.rotationQuaternion = null
-      baseInstance.rotation.copyFromFloats(0, 0, 0)
+      baseInstance.rotation.copyFromFloats(0, Math.PI / 6, 0)
       baseInstance.scaling.copyFromFloats(1, 1, 1)
       baseInstance.position.set(x, 0, z)
     }
