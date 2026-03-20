@@ -1,25 +1,24 @@
 /**
- * tileRenderer.ts — Loads STL hex tiles, bakes geometry, and places them on the board.
+ * tileRenderer.ts — Loads GLB hex tiles (with vertex colors), bakes geometry,
+ * and places them on the board.
  *
- * ## STL Loader Gotchas (Babylon.js)
+ * ## GLB Pipeline
  *
- * 1. **Non-updatable geometry.** The Babylon.js STL loader produces meshes whose
- *    vertex buffers are non-updatable. Calling `updateVerticesData()` on them
- *    *silently fails* — no error, no effect. The workaround is to read the raw
- *    vertex data, transform it in JS, then apply it to a *new* mesh via
- *    `VertexData.applyToMesh(mesh, true)` (updatable = true).
+ * Tile meshes are exported from Blender as GLB files with baked vertex colors
+ * (Z-height-based gradients). The GLTF loader handles Y-up conversion.
  *
- * 2. **Automatic Z-up → Y-up conversion.** The STL loader converts from STL's
- *    Z-up convention to Babylon's Y-up. After loading, X and Z are the horizontal
- *    plane and Y is height. No manual axis rotation is needed for land tiles.
+ * ## Key Notes
  *
- * 3. **Pointy-top vs flat-top orientation.** Water/harbor STL files are modeled
+ * 1. **Vertex colors.** GLB files include per-vertex colors painted by the
+ *    Blender script (`scripts/add_vertex_colors.py`). These are copied into
+ *    the baked VertexData and rendered via `PBRMaterial.useVertexColors`.
+ *
+ * 2. **Pointy-top vs flat-top orientation.** Water/harbor GLB files are modeled
  *    as pointy-top hexagons, while land tiles are flat-top. Water tiles need a
  *    30° Y-axis rotation baked into their vertex data to match the board layout.
  *
- * 4. **Off-center geometry.** Some STL files (e.g. wood.stl, water.stl) have
- *    geometry that is not centered at the origin. Centering must be computed from
- *    the actual vertex bounds after loading — never assume (0,0,0) is the center.
+ * 3. **Off-center geometry.** Some GLB files have geometry that is not centered
+ *    at the origin. Centering is computed from actual vertex bounds after loading.
  */
 
 import {
@@ -31,7 +30,7 @@ import {
   VertexBuffer,
   VertexData,
 } from '@babylonjs/core'
-import '@babylonjs/loaders/STL'
+import '@babylonjs/loaders'
 import { HexTile, TileType } from './types'
 import { axialToWorld } from './board'
 
@@ -59,28 +58,16 @@ const TILE_Y_ROTATION: Partial<Record<TileType, number>> = {
   harbor_water: WATER_ROTATION_RAD,
 }
 
-/** Albedo colors per tile type (hex strings). */
-const TILE_COLORS: Record<TileType, string> = {
-  wood:         '#2d5a1b',
-  wool:         '#7ecf3f',
-  wheat:        '#e8c84a',
-  brick:        '#b5432a',
-  ore:          '#6b7c8c',
-  desert:       '#d4b86a',
-  water:        '#1a5fa8',
-  harbor_water: '#1a5fa8',
-}
-
-/** STL filename per tile type (served from /assets/). */
-const TILE_STL_MAP: Record<TileType, string> = {
-  wood:         'wood.stl',
-  wool:         'wool.stl',
-  wheat:        'wheet.stl',
-  brick:        'brick.stl',
-  ore:          'ore.stl',
-  desert:       'desert.stl',
-  water:        'water.stl',
-  harbor_water: 'harbor_water.stl',
+/** GLB filename per tile type (served from /assets/). */
+const TILE_GLB_MAP: Record<TileType, string> = {
+  wood:         'wood.glb',
+  wool:         'wool.glb',
+  wheat:        'wheet.glb',
+  brick:        'brick.glb',
+  ore:          'ore.glb',
+  desert:       'desert.glb',
+  water:        'water.glb',
+  harbor_water: 'harbor_water.glb',
 }
 
 /** Water and harbor tiles get slight transparency. */
@@ -91,13 +78,6 @@ const MAT_METALLIC  = 0.1
 const MAT_ROUGHNESS = 0.8
 
 // ─── Utility ─────────────────────────────────────────────────────────────────
-
-function hexColorToColor3(hex: string): Color3 {
-  const r = parseInt(hex.slice(1, 3), 16) / 255
-  const g = parseInt(hex.slice(3, 5), 16) / 255
-  const b = parseInt(hex.slice(5, 7), 16) / 255
-  return new Color3(r, g, b)
-}
 
 function isWaterType(type: TileType): boolean {
   return type === 'water' || type === 'harbor_water'
@@ -200,13 +180,13 @@ async function loadTemplateMesh(scene: Scene, tileType: TileType): Promise<Mesh>
   const cached = templateCache.get(tileType)
   if (cached) return cached
 
-  // Step 1: Import STL
-  const result = await SceneLoader.ImportMeshAsync('', '/assets/', TILE_STL_MAP[tileType], scene)
+  // Step 1: Import GLB
+  const result = await SceneLoader.ImportMeshAsync('', '/assets/', TILE_GLB_MAP[tileType], scene)
 
   // Step 2: Find the mesh that actually has geometry
   const srcMesh = findGeometryMesh(result.meshes)
   if (!srcMesh) {
-    throw new Error(`STL for "${tileType}" (${TILE_STL_MAP[tileType]}) has no mesh with position data`)
+    throw new Error(`GLB for "${tileType}" (${TILE_GLB_MAP[tileType]}) has no mesh with position data`)
   }
 
   // Read raw vertex data. These are safe to assert non-null because findGeometryMesh
@@ -214,9 +194,10 @@ async function loadTemplateMesh(scene: Scene, tileType: TileType): Promise<Mesh>
   const rawPositions = srcMesh.getVerticesData(VertexBuffer.PositionKind)
   if (!rawPositions) {
     // Defensive: shouldn't happen given findGeometryMesh, but satisfies strict null checks
-    throw new Error(`Failed to read positions from "${tileType}" STL`)
+    throw new Error(`Failed to read positions from "${tileType}" GLB`)
   }
   const rawNormals = srcMesh.getVerticesData(VertexBuffer.NormalKind)
+  const rawColors  = srcMesh.getVerticesData(VertexBuffer.ColorKind)
   const indices    = srcMesh.getIndices()
 
   // Work on Float32Array copies so we can mutate freely
@@ -245,6 +226,7 @@ async function loadTemplateMesh(scene: Scene, tileType: TileType): Promise<Mesh>
   const vertexData = new VertexData()
   vertexData.positions = positions
   if (normals) vertexData.normals = normals
+  if (rawColors) vertexData.colors = new Float32Array(rawColors)
   if (indices) vertexData.indices = indices
   vertexData.applyToMesh(templateMesh, /* updatable */ true)
 
@@ -274,7 +256,7 @@ function getOrCreateMaterial(scene: Scene, tileType: TileType): PBRMaterial {
   if (existing) return existing
 
   const mat = new PBRMaterial(`mat_${tileType}`, scene)
-  mat.albedoColor = hexColorToColor3(TILE_COLORS[tileType])
+  mat.albedoColor = new Color3(1, 1, 1)  // White — vertex colors provide the actual color
   mat.metallic  = MAT_METALLIC
   mat.roughness = MAT_ROUGHNESS
 
@@ -309,6 +291,9 @@ function placeTileInstance(scene: Scene, tile: HexTile, template: Mesh): void {
 
   const { x, z } = axialToWorld(tile.q, tile.r)
   instance.position.set(x, 0, z)
+
+  // Enable vertex color rendering on the mesh
+  instance.useVertexColors = true
 
   instance.material = getOrCreateMaterial(scene, tile.type)
 }
