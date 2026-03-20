@@ -211,20 +211,25 @@ async function loadTemplateMesh(scene: Scene, tileType: TileType): Promise<Mesh>
   const templateMesh = new Mesh(`template_${tileType}`, scene)
   const vertexData = new VertexData()
   vertexData.positions = positions
-  // Recompute normals from the corrected geometry — the GLB normals are
-  // unreliable after Z-negation (they were for the pre-negation coordinate space).
+  // Use Z-negated GLB normals directly. Blender produces correct outward-facing
+  // normals; after Z-negation they are in Babylon's left-handed coordinate space.
+  // We do NOT call ComputeNormals — it produces inward normals for CW-wound
+  // triangles and negating them is unreliable in practice.
   const finalIndices = fixedIndices ?? (indices ? new Int32Array(indices) : null)
   if (finalIndices) {
-    const recomputedNormals = new Float32Array(positions.length)
-    VertexData.ComputeNormals(positions, finalIndices, recomputedNormals)
-    // Negate all computed normals. ComputeNormals uses right-hand cross product,
-    // which gives inward normals for CW-wound triangles. Negating restores
-    // correct outward-facing normals for proper lighting (tops bright, undersides dark).
-    for (let i = 0; i < recomputedNormals.length; i++) {
-      recomputedNormals[i] = -recomputedNormals[i]
-    }
-    vertexData.normals = recomputedNormals
     vertexData.indices = finalIndices
+    if (normals) {
+      // GLB normals already Z-negated above — use them directly
+      vertexData.normals = normals
+    } else {
+      // Fallback: no normals in GLB — compute flat normals and negate
+      const recomputedNormals = new Float32Array(positions.length)
+      VertexData.ComputeNormals(positions, finalIndices, recomputedNormals)
+      for (let i = 0; i < recomputedNormals.length; i++) {
+        recomputedNormals[i] = -recomputedNormals[i]
+      }
+      vertexData.normals = recomputedNormals
+    }
   }
   if (rawColors) vertexData.colors = new Float32Array(rawColors)
   vertexData.applyToMesh(templateMesh, /* updatable */ true)
