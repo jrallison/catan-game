@@ -1,6 +1,9 @@
 # COORDINATE_CONVENTIONS.md — Catan 3D Game
 
-Read this before writing any placement, rotation, or material code.
+**Cross-project conventions** (Blender pipeline, material standard, color pipeline, asset inspection, standing rules) live in Fairway's shared reference:
+`~/.openclaw/agents/fairway/workspace/references/3D_GAME_CONVENTIONS.md`
+
+This file contains **Catan-specific** values only.
 
 ---
 
