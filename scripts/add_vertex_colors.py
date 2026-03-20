@@ -64,6 +64,7 @@ PALETTE = {
     14: hex_to_srgb("#9e4a28"),  # Terracotta clay (brick base)
     15: hex_to_srgb("#808080"),  # Medium gray (ore base)
     16: hex_to_srgb("#E6B200"),  # Darker gold (wheat base)
+    17: hex_to_srgb("#FFD966"),  # Bright sandy yellow (desert base)
 }
 
 # ─── Player colors (4 players) ────────────────────────────────────────────────
@@ -86,7 +87,7 @@ TILE_PART_COLORS = {
     "brick":        {"brick_-_1": 14, "brick_-_2": 3,  "brick_-_3": 8,  "brick_-_4": 4},
     "wood":         {"wood_-_1": 13, "wood_-_2": 8,  "wood_-_3": 2,  "wood_-_4": 3},
     "wool":         {"wool_-_1": 6,  "wool_-_2": 3,  "wool_-_3": 8,  "wool_-_4": 7},
-    "desert":       {"desert_-_1": 5,  "desert_-_2": 3,  "desert_-_3": 8,  "desert_-_4": 7},
+    "desert":       {"desert_-_1": 17, "desert_-_2": 3,  "desert_-_3": 8,  "desert_-_4": 7},
     "water":        {"water_-_1": 11, "water_-_2": 12, "water_-_3": 7},
     "harbor_water": {"harbor_water_-_1": 11, "harbor_water_-_2": 12, "harbor_water_-_3": 7},
 
