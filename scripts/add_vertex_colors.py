@@ -3,12 +3,11 @@ add_vertex_colors.py — Blender headless script.
 
 Color strategy: SEPARATE PART FILES (correct approach)
 
-Each tile type has separate _-_1.stl, _-_2.stl, etc. files from Thingiverse,
-designed for Prusa MMU multi-material printing. Each file is one color.
-We import each part, paint it solid with its exact color, join all parts,
-and export as a single GLB with vertex colors.
+Each piece has separate _-_N.stl files from Thingiverse, designed for Prusa MMU
+multi-material printing. Each file is one color. We import each part, paint it
+solid with its exact color, join all parts, and export as a single GLB.
 
-Color numbers map exactly to the palette in Color-composition.pdf (pixel-sampled).
+Color source: Color-composition.pdf by Dakanzla (pixel-sampled swatch values).
 
 Usage:
     blender --background --python scripts/add_vertex_colors.py
@@ -48,19 +47,101 @@ PALETTE = {
     12: hex_to_linear("#27FFF5"),  # Turquoise
 }
 
-# ─── Part color assignments from Color-composition.pdf ────────────────────────
-# Format: tile_type -> {part_number: palette_color_number}
-# Part numbers match the _-_N suffix in the STL filenames.
+# ─── Player colors (4 players) ────────────────────────────────────────────────
+PLAYER_COLORS = {
+    "p1": hex_to_linear("#FF6600"),  # Orange (palette 1)
+    "p2": hex_to_linear("#27FFF5"),  # Turquoise (palette 12)
+    "p3": hex_to_linear("#66FF33"),  # Light green (palette 6)
+    "p4": hex_to_linear("#C00000"),  # Red (palette 4)
+}
+
+# ─── Part color assignments (from Color-composition.pdf) ──────────────────────
+# Format: tile_type -> {filename_stem: palette_color_number}
+# For player pieces (settlements, cities, roads, crossings): default to player 1 (orange)
+# The file stem is matched case-insensitively.
 
 TILE_PART_COLORS = {
-    "ore":          {1: 2,  2: 9,  3: 3,  4: 8},
-    "wheet":        {1: 5,  2: 10, 3: 4,  4: 8},
-    "brick":        {1: 2,  2: 3,  3: 8,  4: 4},
-    "wood":         {1: 6,  2: 8,  3: 2,  4: 3},
-    "wool":         {1: 6,  2: 3,  3: 8,  4: 7},
-    "desert":       {1: 5,  2: 3,  3: 8,  4: 7},
-    "water":        {1: 11, 2: 12, 3: 7},
-    "harbor_water": {1: 11, 2: 12, 3: 7},
+    # Landscapes
+    "ore":          {"ore_-_1": 2,  "ore_-_2": 9,  "ore_-_3": 3,  "ore_-_4": 8},
+    "wheet":        {"wheet_-_1": 5,  "wheet_-_2": 10, "wheet_-_3": 4,  "wheet_-_4": 8},
+    "brick":        {"brick_-_1": 2,  "brick_-_2": 3,  "brick_-_3": 8,  "brick_-_4": 4},
+    "wood":         {"wood_-_1": 6,  "wood_-_2": 8,  "wood_-_3": 2,  "wood_-_4": 3},
+    "wool":         {"wool_-_1": 6,  "wool_-_2": 3,  "wool_-_3": 8,  "wool_-_4": 7},
+    "desert":       {"desert_-_1": 5,  "desert_-_2": 3,  "desert_-_3": 8,  "desert_-_4": 7},
+    "water":        {"water_-_1": 11, "water_-_2": 12, "water_-_3": 7},
+    "harbor_water": {"harbor_water_-_1": 11, "harbor_water_-_2": 12, "harbor_water_-_3": 7},
+
+    # Number tokens
+    "number_tokens": {
+        "number_tokens_-_1": 9,
+        "number_tokens_-_2": 1,
+        "number_tokens_-_3": 7,
+        "number_tokens_-_4": 4,
+    },
+
+    # Player pieces — use player 1 (orange) by default for rendering
+    "settlements": {
+        "settlement_1": 1,  # player color
+        "settlement_2": 9,  # grey base
+        "settlement_3": 8,  # green roof
+    },
+    "cities": {
+        "city_-_1": 1,  # player color
+        "city_-_2": 9,  # grey base
+        "city_-_3": 8,  # green detail
+    },
+    "roads": {
+        "road_-_1": 1,  # player color
+        "road_-_2": 9,  # grey
+    },
+    "crossings": {
+        "crossing_-_1": 1,  # player color
+        "crossing_-_2": 9,  # grey
+    },
+
+    # Harbor pieces
+    "harbor_resources": {
+        "harbor_3_for_1": 5,   # gold
+        "harbor_brick":   1,   # orange
+        "harbor_wool":    7,   # white
+        "harbor_wood":    3,   # brown
+        "harbor_ore":     9,   # grey
+        "harbor_wheet":   10,  # yellow
+    },
+    "harbor_base": {
+        "harbor_base_-_1": 2,
+        "harbor_base_-_2": 12,
+        "harbor_base_-_3": 3,
+        "harbor_base_-_4": 7,
+    },
+    "harbor_top": {
+        "harbor_top_-_1": 9,
+        "harbor_top_-_2": 3,
+        "harbor_top_-_3": 2,
+        "harbor_top_-_4": 4,
+    },
+
+    # Robber
+    "sandstorm": {
+        "sandstorm_-_1": 5,
+        "sandstorm_-_2": 2,
+        "sandstorm_-_3": 8,
+        "sandstorm_-_4": 7,
+    },
+
+    # Landscape bases (single file, color by tile type — we export one per type)
+    # These are handled separately below.
+}
+
+# Landscape base colors: one base.stl per tile type, different colors
+LANDSCAPE_BASE_COLORS = {
+    "base_brick":   1,   # orange
+    "base_wool":    7,   # white
+    "base_wood":    3,   # brown
+    "base_ore":     9,   # grey
+    "base_wheet":   10,  # yellow
+    "base_desert":  5,   # gold
+    "base_water":   11,  # blue/green
 }
 
 
@@ -107,63 +188,28 @@ def create_vertex_color_material(name):
     return mat
 
 
-def process_tile(tile_type):
-    part_colors = TILE_PART_COLORS[tile_type]
-    parts_subdir = os.path.join(PARTS_DIR, tile_type)
-    glb_path = os.path.join(ASSETS_DIR, tile_type + ".glb")
-
-    print(f"\nProcessing: {tile_type} → {tile_type}.glb")
-    clear_scene()
-
-    imported_objects = []
-
-    for part_num, palette_num in sorted(part_colors.items()):
-        stl_path = os.path.join(parts_subdir, f"{tile_type}_-_{part_num}.stl")
-        if not os.path.exists(stl_path):
-            print(f"  WARNING: {stl_path} not found, skipping")
-            continue
-
-        bpy.ops.object.select_all(action="DESELECT")
-        bpy.ops.wm.stl_import(filepath=stl_path)
-
-        # Find newly imported objects
-        new_objs = [o for o in bpy.context.selected_objects]
-        if not new_objs:
-            print(f"  WARNING: No objects imported from {stl_path}")
-            continue
-
-        color = PALETTE[palette_num]
-        print(f"  Part {part_num} → palette color {palette_num} ({stl_path.split('/')[-1]})")
-
-        for obj in new_objs:
-            obj.name = f"{tile_type}_part{part_num}"
-            paint_solid(obj, color)
-            imported_objects.append(obj)
-
-    if not imported_objects:
-        print(f"  ERROR: No parts imported for {tile_type}")
-        return
-
-    # Select all imported objects and join into one mesh
+def import_stl_and_paint(stl_path, color):
+    """Import an STL file and paint it solid color. Returns the imported object(s)."""
+    if not os.path.exists(stl_path):
+        print(f"  WARNING: {stl_path} not found, skipping")
+        return []
     bpy.ops.object.select_all(action="DESELECT")
-    for obj in imported_objects:
-        obj.select_set(True)
-    bpy.context.view_layer.objects.active = imported_objects[0]
-    bpy.ops.object.join()
+    bpy.ops.wm.stl_import(filepath=stl_path)
+    new_objs = list(bpy.context.selected_objects)
+    if not new_objs:
+        print(f"  WARNING: No objects imported from {stl_path}")
+        return []
+    for obj in new_objs:
+        paint_solid(obj, color)
+    return new_objs
 
-    joined = bpy.context.active_object
-    joined.name = tile_type
 
-    # Assign single material that uses vertex colors
-    mat = create_vertex_color_material(f"mat_{tile_type}")
-    joined.data.materials.clear()
-    joined.data.materials.append(mat)
-
-    # Export as GLB
+def export_glb(obj, glb_path):
+    """Export a single joined object as GLB."""
     bpy.ops.object.select_all(action="DESELECT")
-    joined.select_set(True)
-    bpy.context.view_layer.objects.active = joined
-
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    os.makedirs(os.path.dirname(glb_path), exist_ok=True)
     bpy.ops.export_scene.gltf(
         filepath=glb_path,
         export_format='GLB',
@@ -176,10 +222,127 @@ def process_tile(tile_type):
     print(f"  ✓ Exported: {glb_path}")
 
 
+def process_tile(tile_type):
+    """Process a tile type that has _-_N.stl part files."""
+    part_colors = TILE_PART_COLORS[tile_type]
+    parts_subdir = os.path.join(PARTS_DIR, tile_type)
+    glb_path = os.path.join(ASSETS_DIR, tile_type + ".glb")
+
+    print(f"\nProcessing: {tile_type} → {tile_type}.glb")
+    clear_scene()
+
+    imported_objects = []
+
+    for file_stem, palette_num in sorted(part_colors.items()):
+        stl_path = os.path.join(parts_subdir, file_stem + ".stl")
+        # Try case-insensitive match
+        if not os.path.exists(stl_path):
+            # Check directory for case-insensitive match
+            if os.path.isdir(parts_subdir):
+                for f in os.listdir(parts_subdir):
+                    if f.lower() == (file_stem + ".stl").lower():
+                        stl_path = os.path.join(parts_subdir, f)
+                        break
+
+        color = PALETTE[palette_num]
+        print(f"  {file_stem} → palette color {palette_num}")
+        objs = import_stl_and_paint(stl_path, color)
+        imported_objects.extend(objs)
+
+    if not imported_objects:
+        print(f"  ERROR: No parts imported for {tile_type}")
+        return
+
+    # Join all parts
+    bpy.ops.object.select_all(action="DESELECT")
+    for obj in imported_objects:
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = imported_objects[0]
+    bpy.ops.object.join()
+
+    joined = bpy.context.active_object
+    joined.name = tile_type
+    mat = create_vertex_color_material(f"mat_{tile_type}")
+    joined.data.materials.clear()
+    joined.data.materials.append(mat)
+
+    export_glb(joined, glb_path)
+
+
+def process_harbor_resources():
+    """Each harbor resource is a SINGLE .stl with a solid color — export individually."""
+    print("\nProcessing: harbor_resources (individual files)")
+    part_colors = TILE_PART_COLORS["harbor_resources"]
+    parts_subdir = os.path.join(PARTS_DIR, "harbor_resources")
+
+    for file_stem, palette_num in sorted(part_colors.items()):
+        stl_path = os.path.join(parts_subdir, file_stem + ".stl")
+        glb_path = os.path.join(ASSETS_DIR, "harbor_resources", file_stem + ".glb")
+        print(f"\n  {file_stem} → palette color {palette_num}")
+        clear_scene()
+        color = PALETTE[palette_num]
+        objs = import_stl_and_paint(stl_path, color)
+        if not objs:
+            continue
+        bpy.ops.object.select_all(action="DESELECT")
+        for obj in objs:
+            obj.select_set(True)
+        bpy.context.view_layer.objects.active = objs[0]
+        if len(objs) > 1:
+            bpy.ops.object.join()
+        joined = bpy.context.active_object
+        joined.name = file_stem
+        mat = create_vertex_color_material(f"mat_{file_stem}")
+        joined.data.materials.clear()
+        joined.data.materials.append(mat)
+        export_glb(joined, glb_path)
+
+
+def process_landscape_bases():
+    """base.stl is a single file exported in 7 color variants."""
+    print("\nProcessing: landscape_bases (color variants)")
+    base_stl = os.path.join(PARTS_DIR, "landscape_bases", "base.stl")
+    if not os.path.exists(base_stl):
+        print(f"  ERROR: {base_stl} not found")
+        return
+
+    for name, palette_num in LANDSCAPE_BASE_COLORS.items():
+        glb_path = os.path.join(ASSETS_DIR, "landscape_bases", name + ".glb")
+        print(f"\n  {name} → palette color {palette_num}")
+        clear_scene()
+        color = PALETTE[palette_num]
+        objs = import_stl_and_paint(base_stl, color)
+        if not objs:
+            continue
+        bpy.ops.object.select_all(action="DESELECT")
+        for obj in objs:
+            obj.select_set(True)
+        bpy.context.view_layer.objects.active = objs[0]
+        if len(objs) > 1:
+            bpy.ops.object.join()
+        joined = bpy.context.active_object
+        joined.name = name
+        mat = create_vertex_color_material(f"mat_{name}")
+        joined.data.materials.clear()
+        joined.data.materials.append(mat)
+        export_glb(joined, glb_path)
+
+
 def main():
-    tiles = ["wool", "wood", "wheet", "brick", "ore", "desert", "water", "harbor_water"]
-    for tile_type in tiles:
+    # Landscape tiles
+    for tile_type in ["wool", "wood", "wheet", "brick", "ore", "desert", "water", "harbor_water"]:
         process_tile(tile_type)
-    print("\nAll done.")
+
+    # Game pieces
+    for piece_type in ["number_tokens", "settlements", "cities", "roads", "crossings",
+                       "harbor_base", "harbor_top", "sandstorm"]:
+        process_tile(piece_type)
+
+    # Special cases
+    process_harbor_resources()
+    process_landscape_bases()
+
+    print("\n\nAll done.")
+
 
 main()
