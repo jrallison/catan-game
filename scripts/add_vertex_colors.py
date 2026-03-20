@@ -1,15 +1,14 @@
 """
 add_vertex_colors.py — Blender headless script.
 
-Color strategy: Z-HEIGHT BANDING
+Color strategy: SEPARATE PART FILES (correct approach)
 
-The Color-composition.pdf describes FILAMENT CHANGE POINTS during 3D printing.
-Ore_-_1, Ore_-_2, etc. are NOT separate files — they are the same mesh printed
-in successive color bands from bottom (Z=0) to top (Z=max). Each _-_N color
-occupies an equal slice of the tile's Z range.
+Each tile type has separate _-_1.stl, _-_2.stl, etc. files from Thingiverse,
+designed for Prusa MMU multi-material printing. Each file is one color.
+We import each part, paint it solid with its exact color, join all parts,
+and export as a single GLB with vertex colors.
 
-This script divides each tile's Z range into N equal bands and assigns the
-doc's colors as hard cuts, bottom→top, per vertex.
+Color numbers map exactly to the palette in Color-composition.pdf (pixel-sampled).
 
 Usage:
     blender --background --python scripts/add_vertex_colors.py
@@ -21,10 +20,11 @@ import os
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 ASSETS_DIR = os.path.join(PROJECT_DIR, "public", "assets")
+PARTS_DIR = os.path.expanduser("~/Downloads/catan-parts")
 
 
 def hex_to_linear(h):
-    """Convert '#rrggbb' sRGB hex to linear RGB tuple for Blender vertex colors."""
+    """Convert '#rrggbb' sRGB hex to linear RGB for Blender vertex colors."""
     h = h.lstrip("#")
     r, g, b = int(h[0:2], 16) / 255.0, int(h[2:4], 16) / 255.0, int(h[4:6], 16) / 255.0
     def to_lin(c):
@@ -33,120 +33,66 @@ def hex_to_linear(h):
 
 
 # ─── Exact RGB values pixel-sampled from Color-composition.pdf swatches ───────
-#
-#  Nr  Name          Hex       Source
-#   1  Orange        #FF6600   sampled
-#   2  Beige         #D9CF74   sampled
-#   3  Brown         #CC6600   sampled
-#   4  Red           #C00000   sampled
-#   5  Gold          #FFCC00   sampled
-#   6  Light green   #66FF33   sampled
-#   7  White         #FFFFFF   sampled
-#   8  Green         #009900   sampled
-#   9  Grey          #BFBFBF   sampled
-#  10  Yellow        #FFFF00   sampled
-#  11  Blue/green    #00716B   sampled
-#  12  Turquoise     #27FFF5   sampled
-
 PALETTE = {
-    1:  hex_to_linear("#FF6600"),
-    2:  hex_to_linear("#D9CF74"),
-    3:  hex_to_linear("#CC6600"),
-    4:  hex_to_linear("#C00000"),
-    5:  hex_to_linear("#FFCC00"),
-    6:  hex_to_linear("#66FF33"),
-    7:  hex_to_linear("#FFFFFF"),
-    8:  hex_to_linear("#009900"),
-    9:  hex_to_linear("#BFBFBF"),
-    10: hex_to_linear("#FFFF00"),
-    11: hex_to_linear("#00716B"),
-    12: hex_to_linear("#27FFF5"),
+    1:  hex_to_linear("#FF6600"),  # Orange
+    2:  hex_to_linear("#D9CF74"),  # Beige
+    3:  hex_to_linear("#CC6600"),  # Brown
+    4:  hex_to_linear("#C00000"),  # Red
+    5:  hex_to_linear("#FFCC00"),  # Gold
+    6:  hex_to_linear("#66FF33"),  # Light green
+    7:  hex_to_linear("#FFFFFF"),  # White
+    8:  hex_to_linear("#009900"),  # Green
+    9:  hex_to_linear("#BFBFBF"),  # Grey
+    10: hex_to_linear("#FFFF00"),  # Yellow
+    11: hex_to_linear("#00716B"),  # Blue/green
+    12: hex_to_linear("#27FFF5"),  # Turquoise
 }
 
-# ─── Per-tile Z-band color sequences (bottom → top = _-_1 → _-_N) ─────────────
-#
-# From Color-composition.pdf "Landscape ..." sections.
-# Each entry is a palette color number, applied to an equal Z slice.
-# _-_1 is at the bottom (Z_min), _-_N is at the top (Z_max).
+# ─── Part color assignments from Color-composition.pdf ────────────────────────
+# Format: tile_type -> {part_number: palette_color_number}
+# Part numbers match the _-_N suffix in the STL filenames.
 
-TILE_BANDS = {
-    #         _-_1   _-_2   _-_3   _-_4
-    "wool":   [6,     3,     8,     7],   # Light green, Brown, Green, White
-    "wood":   [6,     8,     2,     3],   # Light green, Green, Beige, Brown
-    "wheet":  [5,     10,    4,     8],   # Gold, Yellow, Red, Green
-    "brick":  [2,     3,     8,     4],   # Beige, Brown, Green, Red
-    "ore":    [2,     9,     3,     8],   # Beige, Grey, Brown, Green
-    "desert": [5,     3,     8,     7],   # Gold, Brown, Green, White
-    "water":        [11,    12,    7],    # Blue/green, Turquoise, White (3 bands)
-    "harbor_water": [11,    12,    7],
+TILE_PART_COLORS = {
+    "ore":          {1: 2,  2: 9,  3: 3,  4: 8},
+    "wheet":        {1: 5,  2: 10, 3: 4,  4: 8},
+    "brick":        {1: 2,  2: 3,  3: 8,  4: 4},
+    "wood":         {1: 6,  2: 8,  3: 2,  4: 3},
+    "wool":         {1: 6,  2: 3,  3: 8,  4: 7},
+    "desert":       {1: 5,  2: 3,  3: 8,  4: 7},
+    "water":        {1: 11, 2: 12, 3: 7},
+    "harbor_water": {1: 11, 2: 12, 3: 7},
 }
 
 
-def paint_z_bands(obj, bands):
-    """
-    Paint per-vertex colors based on Z-height bands.
+def clear_scene():
+    bpy.ops.object.select_all(action="SELECT")
+    bpy.ops.object.delete(use_global=False)
+    for block in list(bpy.data.meshes):
+        bpy.data.meshes.remove(block)
+    for block in list(bpy.data.materials):
+        bpy.data.materials.remove(block)
 
-    Divides the object's Z range into len(bands) equal slices and assigns
-    each vertex the color of whichever band its Z coordinate falls in.
-    Colors are written per-loop (face corner) as required by Blender.
-    """
+
+def paint_solid(obj, color):
+    """Paint every face of obj a single solid color using a vertex color attribute."""
     mesh = obj.data
-    n = len(bands)
-
-    # Compute Z range across all vertices
-    zs = [v.co.z for v in mesh.vertices]
-    if not zs:
-        return
-    z_min, z_max = min(zs), max(zs)
-    z_range = z_max - z_min
-    if z_range < 1e-6:
-        # Flat mesh — use bottom band color
-        band_color = PALETTE[bands[0]]
-        _paint_solid(mesh, band_color)
-        return
-
-    # Per-vertex band index
-    vert_band = []
-    for v in mesh.vertices:
-        t = (v.co.z - z_min) / z_range          # 0.0 at bottom, 1.0 at top
-        idx = min(int(t * n), n - 1)             # band 0..n-1
-        vert_band.append(idx)
-
-    # Ensure color attribute exists
     attr_name = "Col"
     if attr_name not in mesh.color_attributes:
         mesh.color_attributes.new(name=attr_name, type='BYTE_COLOR', domain='CORNER')
-    color_attr = mesh.color_attributes[attr_name]
-
-    # Write color per loop (face corner)
+    ca = mesh.color_attributes[attr_name]
     for poly in mesh.polygons:
         for loop_idx in poly.loop_indices:
-            vert_idx = mesh.loops[loop_idx].vertex_index
-            band_idx = vert_band[vert_idx]
-            c = PALETTE[bands[band_idx]]
-            color_attr.data[loop_idx].color = (c[0], c[1], c[2], 1.0)
-
-
-def _paint_solid(mesh, color):
-    """Paint the entire mesh a single solid color."""
-    attr_name = "Col"
-    if attr_name not in mesh.color_attributes:
-        mesh.color_attributes.new(name=attr_name, type='BYTE_COLOR', domain='CORNER')
-    color_attr = mesh.color_attributes[attr_name]
-    for poly in mesh.polygons:
-        for loop_idx in poly.loop_indices:
-            color_attr.data[loop_idx].color = (color[0], color[1], color[2], 1.0)
+            ca.data[loop_idx].color = (color[0], color[1], color[2], 1.0)
 
 
 def create_vertex_color_material(name):
-    """Material that reads vertex colors → Principled BSDF albedo."""
+    """Material: Vertex Color → Principled BSDF."""
     mat = bpy.data.materials.new(name=name)
     mat.use_nodes = True
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
-    for node in list(nodes):
-        nodes.remove(node)
-
+    for n in list(nodes):
+        nodes.remove(n)
     output = nodes.new("ShaderNodeOutputMaterial")
     output.location = (400, 0)
     bsdf = nodes.new("ShaderNodeBsdfPrincipled")
@@ -156,49 +102,67 @@ def create_vertex_color_material(name):
     vcol = nodes.new("ShaderNodeVertexColor")
     vcol.location = (-300, 0)
     vcol.layer_name = "Col"
-
     links.new(vcol.outputs["Color"], bsdf.inputs["Base Color"])
     links.new(bsdf.outputs["BSDF"], output.inputs["Surface"])
     return mat
 
 
-def clear_scene():
-    bpy.ops.object.select_all(action="SELECT")
-    bpy.ops.object.delete(use_global=False)
-    for block in bpy.data.meshes:
-        bpy.data.meshes.remove(block)
-    for block in bpy.data.materials:
-        bpy.data.materials.remove(block)
-
-
 def process_tile(tile_type):
-    stl_path = os.path.join(ASSETS_DIR, tile_type + ".stl")
+    part_colors = TILE_PART_COLORS[tile_type]
+    parts_subdir = os.path.join(PARTS_DIR, tile_type)
     glb_path = os.path.join(ASSETS_DIR, tile_type + ".glb")
 
-    if not os.path.exists(stl_path):
-        print(f"  WARNING: {stl_path} not found, skipping")
-        return
-
-    print(f"\nProcessing: {tile_type}.stl → {tile_type}.glb")
+    print(f"\nProcessing: {tile_type} → {tile_type}.glb")
     clear_scene()
 
-    bpy.ops.wm.stl_import(filepath=stl_path)
-    obj = bpy.context.selected_objects[0]
-    obj.name = tile_type
+    imported_objects = []
 
-    bands = TILE_BANDS[tile_type]
-    zs = [v.co.z for v in obj.data.vertices]
-    print(f"  Vertices: {len(obj.data.vertices)}  Z range: {min(zs):.2f}..{max(zs):.2f}  Bands: {bands}")
+    for part_num, palette_num in sorted(part_colors.items()):
+        stl_path = os.path.join(parts_subdir, f"{tile_type}_-_{part_num}.stl")
+        if not os.path.exists(stl_path):
+            print(f"  WARNING: {stl_path} not found, skipping")
+            continue
 
-    paint_z_bands(obj, bands)
+        bpy.ops.object.select_all(action="DESELECT")
+        bpy.ops.wm.stl_import(filepath=stl_path)
 
-    mat = create_vertex_color_material(f"mat_{tile_type}")
-    obj.data.materials.clear()
-    obj.data.materials.append(mat)
+        # Find newly imported objects
+        new_objs = [o for o in bpy.context.selected_objects]
+        if not new_objs:
+            print(f"  WARNING: No objects imported from {stl_path}")
+            continue
 
+        color = PALETTE[palette_num]
+        print(f"  Part {part_num} → palette color {palette_num} ({stl_path.split('/')[-1]})")
+
+        for obj in new_objs:
+            obj.name = f"{tile_type}_part{part_num}"
+            paint_solid(obj, color)
+            imported_objects.append(obj)
+
+    if not imported_objects:
+        print(f"  ERROR: No parts imported for {tile_type}")
+        return
+
+    # Select all imported objects and join into one mesh
     bpy.ops.object.select_all(action="DESELECT")
-    obj.select_set(True)
-    bpy.context.view_layer.objects.active = obj
+    for obj in imported_objects:
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = imported_objects[0]
+    bpy.ops.object.join()
+
+    joined = bpy.context.active_object
+    joined.name = tile_type
+
+    # Assign single material that uses vertex colors
+    mat = create_vertex_color_material(f"mat_{tile_type}")
+    joined.data.materials.clear()
+    joined.data.materials.append(mat)
+
+    # Export as GLB
+    bpy.ops.object.select_all(action="DESELECT")
+    joined.select_set(True)
+    bpy.context.view_layer.objects.active = joined
 
     bpy.ops.export_scene.gltf(
         filepath=glb_path,
@@ -216,6 +180,6 @@ def main():
     tiles = ["wool", "wood", "wheet", "brick", "ore", "desert", "water", "harbor_water"]
     for tile_type in tiles:
         process_tile(tile_type)
-    print("\nDone.")
+    print("\nAll done.")
 
 main()
