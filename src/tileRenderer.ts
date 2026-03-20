@@ -111,7 +111,8 @@ export async function renderTiles(scene: Scene, tiles: HexTile[]): Promise<void>
 
     instance.setEnabled(true)
 
-    // Apply rotation to lay flat: -90° around X (Z-up STL → Y-up Babylon)
+    // STL loader may set rotationQuaternion; null it out so .rotation is used
+    instance.rotationQuaternion = null
     instance.rotation = new Vector3(-Math.PI / 2, 0, 0)
     instance.scaling.setAll(tmpl.scale)
 
