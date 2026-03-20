@@ -44,9 +44,10 @@ import { axialToWorld } from './board'
  * A regular flat-top hex with that edge-to-edge width has corner-to-corner ≈ 4.2.
  */
 const TARGET_TILE_DIAMETER = 4.2
-// Hex flat-to-flat diameter = size × √3 = 2.1 × 1.732 ≈ 3.64.
-// Landscape bases must stay within this boundary so adjacent bases don't overlap.
-const TARGET_BASE_DIAMETER = 3.64
+// Hex grid spacing: size=3.0, center-to-center = 3.0 × √3 ≈ 5.196.
+// Tiles at 4.2 diameter leave a ~1.0 unit gap. Bases scale to center-to-center
+// distance so they fill the gap exactly — inner edge at tile boundary, outer edges touching.
+const TARGET_BASE_DIAMETER = 5.2
 
 /** GLB filename per tile type (served from /assets/). */
 const TILE_GLB_MAP: Record<TileType, string> = {

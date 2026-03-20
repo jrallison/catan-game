@@ -72,7 +72,7 @@ export function createStandardBoard(): HexTile[] {
 }
 
 // Axial hex coordinate to world position
-export function axialToWorld(q: number, r: number, size: number = 2.1): { x: number; z: number } {
+export function axialToWorld(q: number, r: number, size: number = 3.0): { x: number; z: number } {
   const x = size * (3 / 2 * q)
   const z = size * (Math.sqrt(3) / 2 * q + Math.sqrt(3) * r)
   return { x, z }
