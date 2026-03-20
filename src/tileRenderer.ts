@@ -84,6 +84,10 @@ async function loadTileMesh(scene: Scene, tileType: TileType): Promise<Mesh> {
   const zExtent = zMax - zMin   // horizontal depth (edge-to-edge)
   const maxHoriz = Math.max(xExtent, zExtent)
   const s = TARGET_TILE_DIAMETER / maxHoriz
+  if (tileType === 'desert') {
+    console.log(`[DIAG] desert raw bounds: X=${xMin.toFixed(2)}..${xMax.toFixed(2)} Y=${yMin.toFixed(2)}..${yMax.toFixed(2)} Z=${zMin.toFixed(2)}..${zMax.toFixed(2)}`)
+    console.log(`[DIAG] xExtent=${xExtent.toFixed(2)} zExtent=${zExtent.toFixed(2)} maxHoriz=${maxHoriz.toFixed(2)} s=${s.toFixed(4)} TARGET=${TARGET_TILE_DIAMETER}`)
+  }
 
   const cx = (xMin + xMax) / 2
   const cy = yMin               // base of terrain → Y=0
