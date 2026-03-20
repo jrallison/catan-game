@@ -44,6 +44,9 @@ import { axialToWorld } from './board'
  * A regular flat-top hex with that edge-to-edge width has corner-to-corner ≈ 4.2.
  */
 const TARGET_TILE_DIAMETER = 4.2
+// Hex flat-to-flat diameter = size × √3 = 2.1 × 1.732 ≈ 3.64.
+// Landscape bases must stay within this boundary so adjacent bases don't overlap.
+const TARGET_BASE_DIAMETER = 3.64
 
 /** GLB filename per tile type (served from /assets/). */
 const TILE_GLB_MAP: Record<TileType, string> = {
@@ -313,9 +316,9 @@ async function loadBaseTemplateMesh(scene: Scene, tileType: TileType): Promise<M
 
   const fixedIndices = indices ? new Int32Array(indices) : null
 
-  // Scale and center to match tile diameter
+  // Scale bases to flat-to-flat diameter so adjacent bases don't overlap
   const bounds = computeBounds(positions)
-  scaleAndCenter(positions, bounds, TARGET_TILE_DIAMETER)
+  scaleAndCenter(positions, bounds, TARGET_BASE_DIAMETER)
 
   // Build baked template mesh
   const templateMesh = new Mesh(`base_template_${tileType}`, scene)
