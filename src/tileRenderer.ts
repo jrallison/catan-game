@@ -260,10 +260,7 @@ function getOrCreateMaterial(scene: Scene, tileType: TileType): StandardMaterial
   if (existing) return existing
 
   const mat = new StandardMaterial(`mat_${tileType}`, scene)
-  mat.disableLighting = false                      // lighting on — needed for depth on 3D geometry
   mat.diffuseColor = Color3.White()                // vertex colors drive the diffuse response
-  mat.emissiveColor = new Color3(0.35, 0.35, 0.35) // lifts color floor — shadows don't crush vibrancy
-  mat.specularColor = Color3.Black()               // no specular highlights (stylized look)
   mat.backFaceCulling = true                       // correct: Z-negation gives CW winding = front-face in Babylon's left-handed system
 
   if (isWaterType(tileType)) {
