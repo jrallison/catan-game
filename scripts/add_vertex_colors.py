@@ -60,6 +60,9 @@ PALETTE = {
     10: hex_to_srgb("#FFFF00"),  # Yellow
     11: hex_to_srgb("#00716B"),  # Blue/green
     12: hex_to_srgb("#27FFF5"),  # Turquoise
+    13: hex_to_srgb("#4a7a2a"),  # Forest floor green (wood base)
+    14: hex_to_srgb("#7a3a20"),  # Terracotta clay (brick base)
+    15: hex_to_srgb("#808080"),  # Medium gray (ore base)
 }
 
 # ─── Player colors (4 players) ────────────────────────────────────────────────
@@ -77,10 +80,10 @@ PLAYER_COLORS = {
 
 TILE_PART_COLORS = {
     # Landscapes
-    "ore":          {"ore_-_1": 2,  "ore_-_2": 9,  "ore_-_3": 3,  "ore_-_4": 8},
+    "ore":          {"ore_-_1": 15, "ore_-_2": 9,  "ore_-_3": 3,  "ore_-_4": 8},
     "wheet":        {"wheet_-_1": 5,  "wheet_-_2": 10, "wheet_-_3": 4,  "wheet_-_4": 8},
-    "brick":        {"brick_-_1": 2,  "brick_-_2": 3,  "brick_-_3": 8,  "brick_-_4": 4},
-    "wood":         {"wood_-_1": 6,  "wood_-_2": 8,  "wood_-_3": 2,  "wood_-_4": 3},
+    "brick":        {"brick_-_1": 14, "brick_-_2": 3,  "brick_-_3": 8,  "brick_-_4": 4},
+    "wood":         {"wood_-_1": 13, "wood_-_2": 8,  "wood_-_3": 2,  "wood_-_4": 3},
     "wool":         {"wool_-_1": 6,  "wool_-_2": 3,  "wool_-_3": 8,  "wool_-_4": 7},
     "desert":       {"desert_-_1": 5,  "desert_-_2": 3,  "desert_-_3": 8,  "desert_-_4": 7},
     "water":        {"water_-_1": 11, "water_-_2": 12, "water_-_3": 7},
@@ -352,18 +355,39 @@ def process_landscape_bases():
 
 
 def main():
-    # Landscape tiles
-    for tile_type in ["wool", "wood", "wheet", "brick", "ore", "desert", "water", "harbor_water"]:
-        process_tile(tile_type)
+    import sys
 
-    # Game pieces
-    for piece_type in ["number_tokens", "settlements", "cities", "roads", "crossings",
-                       "harbor_base", "harbor_top", "sandstorm"]:
-        process_tile(piece_type)
+    # Support selective tile regeneration via CLI args after "--"
+    # Usage: blender --background --python script.py -- wood brick ore
+    argv = sys.argv
+    tile_filter = None
+    if "--" in argv:
+        tile_filter = argv[argv.index("--") + 1:]
+        if tile_filter:
+            print(f"Selective mode: processing only {tile_filter}")
 
-    # Special cases
-    process_harbor_resources()
-    process_landscape_bases()
+    LANDSCAPE_TILES = ["wool", "wood", "wheet", "brick", "ore", "desert", "water", "harbor_water"]
+    GAME_PIECES = ["number_tokens", "settlements", "cities", "roads", "crossings",
+                   "harbor_base", "harbor_top", "sandstorm"]
+
+    if tile_filter:
+        for t in tile_filter:
+            if t in LANDSCAPE_TILES or t in GAME_PIECES:
+                process_tile(t)
+            elif t == "harbor_resources":
+                process_harbor_resources()
+            elif t == "landscape_bases":
+                process_landscape_bases()
+            else:
+                print(f"Unknown tile type: {t}")
+    else:
+        # Process everything
+        for tile_type in LANDSCAPE_TILES:
+            process_tile(tile_type)
+        for piece_type in GAME_PIECES:
+            process_tile(piece_type)
+        process_harbor_resources()
+        process_landscape_bases()
 
     print("\n\nAll done.")
 
