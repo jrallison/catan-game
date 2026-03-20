@@ -129,7 +129,9 @@ export async function renderTiles(scene: Scene, tiles: HexTile[]): Promise<void>
     inst.setEnabled(true)
     inst.parent = null
     inst.rotationQuaternion = null
-    inst.rotation.copyFromFloats(0, 0, 0)
+    // Water STL uses pointy-top orientation; land tiles are flat-top. Rotate 30° to align.
+    const yRot = (tile.type === 'water' || tile.type === 'harbor_water') ? Math.PI / 6 : 0
+    inst.rotation.copyFromFloats(0, yRot, 0)
 
     // Apply scale + centering via mesh transform (vertex data is non-updatable)
     inst.scaling.setAll(tmpl.scale)
