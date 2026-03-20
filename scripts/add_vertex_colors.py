@@ -63,6 +63,7 @@ PALETTE = {
     13: hex_to_srgb("#5d9435"),  # Forest floor green (wood base)
     14: hex_to_srgb("#9e4a28"),  # Terracotta clay (brick base)
     15: hex_to_srgb("#808080"),  # Medium gray (ore base)
+    16: hex_to_srgb("#CC9900"),  # Darker gold (wheat base)
 }
 
 # ─── Player colors (4 players) ────────────────────────────────────────────────
@@ -81,7 +82,7 @@ PLAYER_COLORS = {
 TILE_PART_COLORS = {
     # Landscapes
     "ore":          {"ore_-_1": 15, "ore_-_2": 9,  "ore_-_3": 3,  "ore_-_4": 8},
-    "wheet":        {"wheet_-_1": 5,  "wheet_-_2": 10, "wheet_-_3": 4,  "wheet_-_4": 8},
+    "wheet":        {"wheet_-_1": 16, "wheet_-_2": 10, "wheet_-_3": 4,  "wheet_-_4": 8},
     "brick":        {"brick_-_1": 14, "brick_-_2": 3,  "brick_-_3": 8,  "brick_-_4": 4},
     "wood":         {"wood_-_1": 13, "wood_-_2": 8,  "wood_-_3": 2,  "wood_-_4": 3},
     "wool":         {"wool_-_1": 6,  "wool_-_2": 3,  "wool_-_3": 8,  "wool_-_4": 7},
