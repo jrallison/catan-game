@@ -44,10 +44,12 @@ import { axialToWorld } from './board'
  * A regular flat-top hex with that edge-to-edge width has corner-to-corner ≈ 4.2.
  */
 const TARGET_TILE_DIAMETER = 4.2
-// Hex grid spacing: size=3.0, center-to-center = 3.0 × √3 ≈ 5.196.
-// Bases scale to point-to-point diameter (size × 2 = 6.0) so each base reaches
-// exactly to the hex corner vertices where three tiles meet — no triangular gaps.
-const TARGET_BASE_DIAMETER = 6.0
+// axialToWorld size=2.6 → center-to-center = 2.6 × √3 = 4.50.
+// Bases scale to 5.2 (= size × 2 = outer point-to-point diameter).
+// This uses the same scale factor as terrain tiles (91.22 blender units → 5.2 game units
+// matches terrain 74 blender units → 4.2 game units at scale 0.0568).
+// Corners of 3 adjacent bases meet exactly at circumradius 2.6 — no triangular gaps.
+const TARGET_BASE_DIAMETER = 5.2
 
 /** GLB filename per tile type (served from /assets/). */
 const TILE_GLB_MAP: Record<TileType, string> = {
@@ -415,8 +417,19 @@ function placeTileInstance(scene: Scene, tile: HexTile, template: Mesh): void {
 
   instance.material = getOrCreateMaterial(scene, tile.type)
 
-  // TODO: place landscape base ring here once spacing is determined
-  // See baseTemplateCache — bases are loaded but not rendered
+  // Place landscape base ring at same position — outer ring fills gap between tiles
+  const baseTemplate = baseTemplateCache.get(tile.type)
+  if (baseTemplate) {
+    const baseInstance = baseTemplate.clone(`base_${tile.q}_${tile.r}`)
+    if (baseInstance) {
+      baseInstance.setEnabled(true)
+      baseInstance.parent = null
+      baseInstance.rotationQuaternion = null
+      baseInstance.rotation.copyFromFloats(0, 0, 0)
+      baseInstance.scaling.copyFromFloats(1, 1, 1)
+      baseInstance.position.set(x, 0, z)
+    }
+  }
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
