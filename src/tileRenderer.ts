@@ -11,7 +11,7 @@
  *
  * 1. **Vertex colors.** GLB files include per-vertex colors painted by the
  *    Blender script (`scripts/add_vertex_colors.py`). These are copied into
- *    the baked VertexData and rendered via `PBRMaterial.useVertexColors`.
+ *    the baked VertexData and rendered via self-lit `StandardMaterial`.
  *
  * 2. **Flat-top orientation.** All GLB files are exported from Blender in
  *    canonical flat-top orientation. Any orientation correction for source STLs
@@ -23,7 +23,7 @@
 
 import {
   Scene,
-  PBRMaterial,
+  StandardMaterial,
   Color3,
   SceneLoader,
   Mesh,
@@ -60,9 +60,7 @@ const TILE_GLB_MAP: Record<TileType, string> = {
 /** Water and harbor tiles get slight transparency. */
 const WATER_ALPHA = 0.85
 
-/** PBR material defaults for all tiles. */
-const MAT_METALLIC  = 0.1
-const MAT_ROUGHNESS = 0.8
+/** Tiles use self-lit StandardMaterial — no PBR needed. */
 
 // ─── Utility ─────────────────────────────────────────────────────────────────
 
@@ -245,22 +243,21 @@ async function loadTemplateMesh(scene: Scene, tileType: TileType): Promise<Mesh>
 
 // ─── Material Pipeline ───────────────────────────────────────────────────────
 
-/** Cached PBR materials keyed by tile type. */
-const materialCache: Map<TileType, PBRMaterial> = new Map()
+/** Cached self-lit materials keyed by tile type. */
+const materialCache: Map<TileType, StandardMaterial> = new Map()
 
-function getOrCreateMaterial(scene: Scene, tileType: TileType): PBRMaterial {
+function getOrCreateMaterial(scene: Scene, tileType: TileType): StandardMaterial {
   const existing = materialCache.get(tileType)
   if (existing) return existing
 
-  const mat = new PBRMaterial(`mat_${tileType}`, scene)
-  mat.albedoColor = new Color3(1, 1, 1)  // White — vertex colors provide the actual color
-  mat.metallic  = MAT_METALLIC
-  mat.roughness = MAT_ROUGHNESS
+  const mat = new StandardMaterial(`mat_${tileType}`, scene)
+  mat.emissiveColor = Color3.White()  // full-brightness vertex colors
+  mat.disableLighting = true          // ignore scene lights — colors are self-lit
+  mat.backFaceCulling = false
 
   if (isWaterType(tileType)) {
     mat.alpha = WATER_ALPHA
   }
-  mat.backFaceCulling = false  // safety net: recomputed normals should be correct, but keep both sides visible
 
   materialCache.set(tileType, mat)
   return mat

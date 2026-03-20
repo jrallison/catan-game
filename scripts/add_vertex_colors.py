@@ -36,37 +36,38 @@ ASSETS_DIR = os.path.join(PROJECT_DIR, "public", "assets")
 PARTS_DIR = os.path.expanduser("~/Downloads/catan-parts")
 
 
-def hex_to_linear(h):
-    """Convert '#rrggbb' sRGB hex to linear RGB for Blender vertex colors."""
+def hex_to_srgb(h: str) -> tuple:
+    """Return raw sRGB float tuple (0-1) for Blender BYTE_COLOR attributes.
+
+    BYTE_COLOR stores sRGB values — do NOT convert to linear here.
+    Blender handles the linear/sRGB conversion on export.
+    """
     h = h.lstrip("#")
-    r, g, b = int(h[0:2], 16) / 255.0, int(h[2:4], 16) / 255.0, int(h[4:6], 16) / 255.0
-    def to_lin(c):
-        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
-    return (to_lin(r), to_lin(g), to_lin(b))
+    return int(h[0:2], 16) / 255.0, int(h[2:4], 16) / 255.0, int(h[4:6], 16) / 255.0
 
 
 # ─── Exact RGB values pixel-sampled from Color-composition.pdf swatches ───────
 PALETTE = {
-    1:  hex_to_linear("#FF6600"),  # Orange
-    2:  hex_to_linear("#D9CF74"),  # Beige
-    3:  hex_to_linear("#CC6600"),  # Brown
-    4:  hex_to_linear("#C00000"),  # Red
-    5:  hex_to_linear("#FFCC00"),  # Gold
-    6:  hex_to_linear("#66FF33"),  # Light green
-    7:  hex_to_linear("#FFFFFF"),  # White
-    8:  hex_to_linear("#009900"),  # Green
-    9:  hex_to_linear("#BFBFBF"),  # Grey
-    10: hex_to_linear("#FFFF00"),  # Yellow
-    11: hex_to_linear("#00716B"),  # Blue/green
-    12: hex_to_linear("#27FFF5"),  # Turquoise
+    1:  hex_to_srgb("#FF6600"),  # Orange
+    2:  hex_to_srgb("#D9CF74"),  # Beige
+    3:  hex_to_srgb("#CC6600"),  # Brown
+    4:  hex_to_srgb("#C00000"),  # Red
+    5:  hex_to_srgb("#FFCC00"),  # Gold
+    6:  hex_to_srgb("#66FF33"),  # Light green
+    7:  hex_to_srgb("#FFFFFF"),  # White
+    8:  hex_to_srgb("#009900"),  # Green
+    9:  hex_to_srgb("#BFBFBF"),  # Grey
+    10: hex_to_srgb("#FFFF00"),  # Yellow
+    11: hex_to_srgb("#00716B"),  # Blue/green
+    12: hex_to_srgb("#27FFF5"),  # Turquoise
 }
 
 # ─── Player colors (4 players) ────────────────────────────────────────────────
 PLAYER_COLORS = {
-    "p1": hex_to_linear("#FF6600"),  # Orange (palette 1)
-    "p2": hex_to_linear("#27FFF5"),  # Turquoise (palette 12)
-    "p3": hex_to_linear("#66FF33"),  # Light green (palette 6)
-    "p4": hex_to_linear("#C00000"),  # Red (palette 4)
+    "p1": hex_to_srgb("#FF6600"),  # Orange (palette 1)
+    "p2": hex_to_srgb("#27FFF5"),  # Turquoise (palette 12)
+    "p3": hex_to_srgb("#66FF33"),  # Light green (palette 6)
+    "p4": hex_to_srgb("#C00000"),  # Red (palette 4)
 }
 
 # ─── Part color assignments (from Color-composition.pdf) ──────────────────────
