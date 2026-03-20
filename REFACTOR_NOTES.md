@@ -1,5 +1,23 @@
 # Tile Renderer Refactor Notes
 
+## Standing Rules (from 2026-03-20 Retrospective)
+
+These rules exist because we learned them the hard way. Don't skip them.
+
+1. **Asset-first diagnostics.** Before writing any GLB/mesh loading code, inspect the asset: node tree, mesh names, vertex counts, connected components. Document structure before writing a loader. (Cost when skipped: number_tokens.glb had 18 meshes — 2 full rewrites.)
+
+2. **Reference `COORDINATE_CONVENTIONS.md` for any rotation or placement task.** Magic numbers must trace back to that doc. Rotation values without documented derivations get bounced.
+
+3. **End-to-end pipeline trace for color/transform specs.** Any task touching color conversion or transforms must include: source → conversion → attribute type → engine processing → output. (`hex_to_linear()` + `BYTE_COLOR` = double gamma because nobody traced the chain.)
+
+4. **Material type is fixed: `StandardMaterial` with emissive lift.** See `COORDINATE_CONVENTIONS.md`. PBR requires explicit sign-off. `disableLighting=true` is wrong (flat). The right model: diffuse=White, emissive=0.35, specular=Black, lighting=on.
+
+5. **One place per fact.** Orientation = asset pipeline (`add_vertex_colors.py`). Color encoding = Blender attribute type. The renderer is dumb about these. If two systems encode the same fact, one of them is wrong.
+
+6. **Fix commits must include the "never again" note.** Write the REFACTOR_NOTES or COORDINATE_CONVENTIONS update in the same commit that fixes the bug.
+
+---
+
 ## STL Loader Gotchas (Babylon.js)
 
 These were discovered through debugging and are now documented in `src/tileRenderer.ts`:
