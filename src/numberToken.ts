@@ -30,7 +30,7 @@ export function renderNumberTokens(scene: Scene, tiles: HexTile[]): void {
     disc.position.x = x + DEPRESSION_OFFSET.x
     disc.position.y = DEPRESSION_OFFSET.y + TOKEN_Y_LIFT
     disc.position.z = z + DEPRESSION_OFFSET.z
-    disc.rotation.y = Math.PI / 2  // correct UV orientation on cylinder top face
+    disc.rotation.y = -Math.PI / 2  // correct UV orientation on cylinder top face
 
     // Create dynamic texture for number and dots
     const textureSize = 256
