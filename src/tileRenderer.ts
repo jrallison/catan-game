@@ -40,6 +40,12 @@ function hexColorToColor3(hex: string): Color3 {
 // Cache of ready-to-clone template meshes (geometry already baked)
 const meshCache: Map<TileType, Mesh> = new Map()
 
+// Water tiles are pointy-top in the STL; land tiles are flat-top. Bake a 30° Y rotation.
+const TILE_Y_ROTATION: Partial<Record<TileType, number>> = {
+  water:        Math.PI / 6,
+  harbor_water: Math.PI / 6,
+}
+
 async function loadTileMesh(scene: Scene, tileType: TileType): Promise<Mesh> {
   const cached = meshCache.get(tileType)
   if (cached) return cached
@@ -61,7 +67,25 @@ async function loadTileMesh(scene: Scene, tileType: TileType): Promise<Mesh> {
   const rawNor = srcMesh.getVerticesData(VertexBuffer.NormalKind)
   const indices = srcMesh.getIndices()
 
-  // Compute raw bounds
+  // Apply Y rotation to raw positions (baked in — avoids transform centering issues)
+  const yRot = TILE_Y_ROTATION[tileType] ?? 0
+  if (yRot !== 0) {
+    const cosY = Math.cos(yRot), sinY = Math.sin(yRot)
+    for (let i = 0; i < rawPos.length; i += 3) {
+      const rx = rawPos[i], rz = rawPos[i + 2]
+      rawPos[i]     = rx * cosY - rz * sinY
+      rawPos[i + 2] = rx * sinY + rz * cosY
+    }
+    if (rawNor) {
+      for (let i = 0; i < rawNor.length; i += 3) {
+        const nx = rawNor[i], nz = rawNor[i + 2]
+        rawNor[i]     = nx * cosY - nz * sinY
+        rawNor[i + 2] = nx * sinY + nz * cosY
+      }
+    }
+  }
+
+  // Compute bounds after rotation
   let xMin = Infinity, xMax = -Infinity
   let yMin = Infinity, yMax = -Infinity
   let zMin = Infinity, zMax = -Infinity
