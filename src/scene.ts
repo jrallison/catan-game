@@ -12,14 +12,14 @@ export function createScene(canvas: HTMLCanvasElement): { engine: Engine; scene:
     'camera',
     0,           // alpha - rotation around Y
     0.3,         // beta - angle from top (0.3 = nearly top-down)
-    30,          // radius - distance from target
+    25,          // radius - distance from target
     Vector3.Zero(),
     scene
   )
   camera.lowerBetaLimit = 0.1
   camera.upperBetaLimit = Math.PI / 2.2
   camera.lowerRadiusLimit = 10
-  camera.upperRadiusLimit = 60
+  camera.upperRadiusLimit = 25
   camera.attachControl(canvas, true)
 
   // Hemispheric light for ambient fill
