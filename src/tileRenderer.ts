@@ -47,29 +47,19 @@ async function loadTileMesh(scene: Scene, tileType: TileType): Promise<Mesh> {
     m => m instanceof Mesh && (m as Mesh).getTotalVertices() > 0
   ) ?? result.meshes[0]) as Mesh
 
-  // --- Pass 1: rotate -90° around X  (x'=x, y'=z, z'=-y) ---
-  // STL is flat in native XY plane (Z = terrain height). This puts it flat in Babylon XZ plane.
-  let pos = mesh.getVerticesData(VertexBuffer.PositionKind)!
-  let nor = mesh.getVerticesData(VertexBuffer.NormalKind)
-  for (let i = 0; i < pos.length; i += 3) {
-    const x = pos[i], y = pos[i + 1], z = pos[i + 2]
-    pos[i] = x; pos[i + 1] = z; pos[i + 2] = -y
-  }
-  if (nor) {
-    for (let i = 0; i < nor.length; i += 3) {
-      const x = nor[i], y = nor[i + 1], z = nor[i + 2]
-      nor[i] = x; nor[i + 1] = z; nor[i + 2] = -y
-    }
-  }
-  mesh.updateVerticesData(VertexBuffer.PositionKind, pos)
-  if (nor) mesh.updateVerticesData(VertexBuffer.NormalKind, nor)
+  // Babylon's STL loader already converts Z-up → Y-up, so tiles are
+  // flat in the XZ plane with Y as the terrain-height axis. No manual
+  // rotation needed.
 
-  // --- Pass 2: compute bounds after rotation ---
+  // Reset any loader-applied scaling so vertex data is authoritative
+  mesh.scaling.copyFromFloats(1, 1, 1)
+
+  // Compute local-space bounds
   mesh.refreshBoundingInfo()
   const bb  = mesh.getBoundingInfo().boundingBox
   const ext = bb.maximum.subtract(bb.minimum)
 
-  // Scale: match tile diameter to grid spacing
+  // The two horizontal extents are X and Z; scale the largest to TARGET_TILE_DIAMETER
   const maxHoriz = Math.max(ext.x, ext.z)
   const s = maxHoriz > 0 ? TARGET_TILE_DIAMETER / maxHoriz : 1
 
@@ -78,8 +68,8 @@ async function loadTileMesh(scene: Scene, tileType: TileType): Promise<Mesh> {
   const cy =  bb.minimum.y                      // base at y=0
   const cz = (bb.minimum.z + bb.maximum.z) / 2
 
-  // --- Pass 2: apply scale + center in one shot ---
-  pos = mesh.getVerticesData(VertexBuffer.PositionKind)!
+  // Apply scale + center in one vertex pass
+  const pos = mesh.getVerticesData(VertexBuffer.PositionKind)!
   for (let i = 0; i < pos.length; i += 3) {
     pos[i]     = (pos[i]     - cx) * s
     pos[i + 1] = (pos[i + 1] - cy) * s
