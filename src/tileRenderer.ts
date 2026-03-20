@@ -261,6 +261,7 @@ function getOrCreateMaterial(scene: Scene, tileType: TileType): StandardMaterial
 
   const mat = new StandardMaterial(`mat_${tileType}`, scene)
   mat.diffuseColor = Color3.White()                // vertex colors drive the diffuse response
+  mat.specularColor = Color3.Black()               // no specular — board game tiles aren't shiny
   mat.backFaceCulling = true                       // correct: Z-negation gives CW winding = front-face in Babylon's left-handed system
 
   if (isWaterType(tileType)) {
