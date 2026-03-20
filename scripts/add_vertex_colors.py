@@ -14,7 +14,21 @@ Usage:
 """
 
 import bpy
+import math
 import os
+
+# ─── Orientation correction ───────────────────────────────────────────────────
+# Some STL source files are pointy-top hexagons; the board expects flat-top.
+# Rotation (degrees around Blender Z axis) is baked before GLB export so that
+# all exported GLBs are in canonical flat-top orientation.  The renderer does
+# NOT apply any orientation correction at runtime.
+#
+# Current STL sources (Thingiverse / Dakanzla) are already flat-top → 0°.
+# If you swap in STLs that are pointy-top, set the value to 30.
+TILE_ROTATION_DEG: dict = {
+    "water": 0,
+    "harbor_water": 0,
+}
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
@@ -262,6 +276,14 @@ def process_tile(tile_type):
 
     joined = bpy.context.active_object
     joined.name = tile_type
+
+    # Apply orientation correction if needed (pointy-top → flat-top)
+    rotation_deg = TILE_ROTATION_DEG.get(tile_type, 0)
+    if rotation_deg != 0:
+        joined.rotation_euler[2] = math.radians(rotation_deg)
+        bpy.ops.object.transform_apply(rotation=True)
+        print(f"  Applied {rotation_deg}° Z-axis rotation (pointy-top → flat-top)")
+
     mat = create_vertex_color_material(f"mat_{tile_type}")
     joined.data.materials.clear()
     joined.data.materials.append(mat)

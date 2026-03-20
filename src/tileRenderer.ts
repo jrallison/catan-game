@@ -13,9 +13,9 @@
  *    Blender script (`scripts/add_vertex_colors.py`). These are copied into
  *    the baked VertexData and rendered via `PBRMaterial.useVertexColors`.
  *
- * 2. **Pointy-top vs flat-top orientation.** Water/harbor GLB files are modeled
- *    as pointy-top hexagons, while land tiles are flat-top. Water tiles need a
- *    30° Y-axis rotation baked into their vertex data to match the board layout.
+ * 2. **Flat-top orientation.** All GLB files are exported from Blender in
+ *    canonical flat-top orientation. Any orientation correction for source STLs
+ *    is baked in the Blender pipeline (`scripts/add_vertex_colors.py`), not here.
  *
  * 3. **Off-center geometry.** Some GLB files have geometry that is not centered
  *    at the origin. Centering is computed from actual vertex bounds after loading.
@@ -44,20 +44,6 @@ import { axialToWorld } from './board'
  * A regular flat-top hex with that edge-to-edge width has corner-to-corner ≈ 4.2.
  */
 const TARGET_TILE_DIAMETER = 4.2
-
-/**
- * Y-axis rotation (radians) to bake into tile geometry before placement.
- *
- * Water and harbor STLs are pointy-top hexagons; the board expects flat-top.
- * A 30° (π/6) rotation converts pointy-top → flat-top.
- */
-const WATER_ROTATION_RAD = Math.PI / 6
-
-/** Per-tile-type Y rotation. Land tiles need none; water/harbor need 30°. */
-const TILE_Y_ROTATION: Partial<Record<TileType, number>> = {
-  water:        WATER_ROTATION_RAD,
-  harbor_water: WATER_ROTATION_RAD,
-}
 
 /** GLB filename per tile type (served from /assets/). */
 const TILE_GLB_MAP: Record<TileType, string> = {
@@ -104,21 +90,6 @@ function findGeometryMesh(meshes: ReadonlyArray<import('@babylonjs/core').Abstra
     }
   }
   return null
-}
-
-/**
- * Rotate an array of 3D vectors (packed as [x,y,z,x,y,z,...]) around the Y axis
- * by `angle` radians, in place.
- */
-function rotateVectorsAroundY(data: Float32Array, angle: number): void {
-  const cos = Math.cos(angle)
-  const sin = Math.sin(angle)
-  for (let i = 0; i < data.length; i += 3) {
-    const x = data[i]
-    const z = data[i + 2]
-    data[i]     = x * cos - z * sin
-    data[i + 2] = x * sin + z * cos
-  }
 }
 
 interface Bounds3D {
@@ -232,16 +203,7 @@ async function loadTemplateMesh(scene: Scene, tileType: TileType): Promise<Mesh>
     }
   }
 
-  // Step 3b: Bake Y rotation into vertex data (water/harbor: pointy-top → flat-top)
-  const yRotation = TILE_Y_ROTATION[tileType] ?? 0
-  if (yRotation !== 0) {
-    rotateVectorsAroundY(positions, yRotation)
-    if (normals) {
-      rotateVectorsAroundY(normals, yRotation)
-    }
-  }
-
-  // Step 4: Compute bounds after rotation, then scale + center
+  // Step 4: Compute bounds, then scale + center
   const bounds = computeBounds(positions)
   scaleAndCenter(positions, bounds, TARGET_TILE_DIAMETER)
   // Normals don't need centering or scaling for a uniform scale factor.
