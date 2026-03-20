@@ -1,9 +1,15 @@
 """
 add_vertex_colors.py — Blender headless script.
 
-Imports each tile STL, separates by loose parts, assigns per-component
-vertex colors using geometry-based classification (not vertex-count order),
-then rejoins and exports as GLB.
+Color strategy: Z-HEIGHT BANDING
+
+The Color-composition.pdf describes FILAMENT CHANGE POINTS during 3D printing.
+Ore_-_1, Ore_-_2, etc. are NOT separate files — they are the same mesh printed
+in successive color bands from bottom (Z=0) to top (Z=max). Each _-_N color
+occupies an equal slice of the tile's Z range.
+
+This script divides each tile's Z range into N equal bands and assigns the
+doc's colors as hard cuts, bottom→top, per vertex.
 
 Usage:
     blender --background --python scripts/add_vertex_colors.py
@@ -11,9 +17,6 @@ Usage:
 
 import bpy
 import os
-import math
-
-# ─── Configuration ────────────────────────────────────────────────────────────
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
@@ -21,313 +24,145 @@ ASSETS_DIR = os.path.join(PROJECT_DIR, "public", "assets")
 
 
 def hex_to_linear(h):
-    """Convert '#rrggbb' to (r, g, b) in linear color space."""
+    """Convert '#rrggbb' sRGB hex to linear RGB tuple for Blender vertex colors."""
     h = h.lstrip("#")
     r, g, b = int(h[0:2], 16) / 255.0, int(h[2:4], 16) / 255.0, int(h[4:6], 16) / 255.0
-
-    def srgb_to_linear(c):
+    def to_lin(c):
         return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+    return (to_lin(r), to_lin(g), to_lin(b))
 
-    return (srgb_to_linear(r), srgb_to_linear(g), srgb_to_linear(b))
 
-
-# ─── Color palette from Color-composition.pdf ────────────────────────────────
+# ─── Exact RGB values pixel-sampled from Color-composition.pdf swatches ───────
+#
+#  Nr  Name          Hex       Source
+#   1  Orange        #FF6600   sampled
+#   2  Beige         #D9CF74   sampled
+#   3  Brown         #CC6600   sampled
+#   4  Red           #C00000   sampled
+#   5  Gold          #FFCC00   sampled
+#   6  Light green   #66FF33   sampled
+#   7  White         #FFFFFF   sampled
+#   8  Green         #009900   sampled
+#   9  Grey          #BFBFBF   sampled
+#  10  Yellow        #FFFF00   sampled
+#  11  Blue/green    #00716B   sampled
+#  12  Turquoise     #27FFF5   sampled
 
 PALETTE = {
-    1:  "#FF6600",  # Orange
-    2:  "#D9CF74",  # Beige
-    3:  "#CC6600",  # Brown
-    4:  "#C00000",  # Red
-    5:  "#FFCC00",  # Gold
-    6:  "#66FF33",  # Light green
-    7:  "#FFFFFF",  # White
-    8:  "#009900",  # Green
-    9:  "#BFBFBF",  # Grey
-    10: "#FFFF00",  # Yellow
-    11: "#00716B",  # Blue/green
-    12: "#27FFF5",  # Turquoise
+    1:  hex_to_linear("#FF6600"),
+    2:  hex_to_linear("#D9CF74"),
+    3:  hex_to_linear("#CC6600"),
+    4:  hex_to_linear("#C00000"),
+    5:  hex_to_linear("#FFCC00"),
+    6:  hex_to_linear("#66FF33"),
+    7:  hex_to_linear("#FFFFFF"),
+    8:  hex_to_linear("#009900"),
+    9:  hex_to_linear("#BFBFBF"),
+    10: hex_to_linear("#FFFF00"),
+    11: hex_to_linear("#00716B"),
+    12: hex_to_linear("#27FFF5"),
 }
 
-def p(n):
-    """Return linear RGB tuple for palette color n."""
-    return hex_to_linear(PALETTE[n])
+# ─── Per-tile Z-band color sequences (bottom → top = _-_1 → _-_N) ─────────────
+#
+# From Color-composition.pdf "Landscape ..." sections.
+# Each entry is a palette color number, applied to an equal Z slice.
+# _-_1 is at the bottom (Z_min), _-_N is at the top (Z_max).
 
-
-# ─── Geometry analysis ────────────────────────────────────────────────────────
-
-def get_part_info(obj):
-    """Compute detailed geometry stats for a mesh object."""
-    mesh = obj.data
-    verts = [v.co for v in mesh.vertices]
-    if not verts:
-        return None
-
-    xs = [v.x for v in verts]
-    ys = [v.y for v in verts]
-    zs = [v.z for v in verts]
-
-    x_min, x_max = min(xs), max(xs)
-    y_min, y_max = min(ys), max(ys)
-    z_min, z_max = min(zs), max(zs)
-
-    x_span = x_max - x_min
-    y_span = y_max - y_min
-    z_span = z_max - z_min
-
-    centroid_x = sum(xs) / len(xs)
-    centroid_y = sum(ys) / len(ys)
-    centroid_z = sum(zs) / len(zs)
-
-    xy_footprint = x_span * y_span
-    aspect_ratio = z_span / math.sqrt(xy_footprint) if xy_footprint > 1e-6 else 999.0
-
-    spans = sorted([x_span, y_span, z_span])
-    equidim_ratio = spans[0] / spans[2] if spans[2] > 1e-6 else 0.0
-
-    return {
-        "obj": obj,
-        "vert_count": len(verts),
-        "centroid_x": centroid_x,
-        "centroid_y": centroid_y,
-        "centroid_z": centroid_z,
-        "x_span": x_span,
-        "y_span": y_span,
-        "z_span": z_span,
-        "xy_footprint": xy_footprint,
-        "aspect_ratio": aspect_ratio,
-        "equidim_ratio": equidim_ratio,
-        "z_min": z_min,
-        "z_max": z_max,
-    }
-
-
-def find_base(parts):
-    """Return the base part (largest XY footprint, flat)."""
-    return max(parts, key=lambda p: p["xy_footprint"])
-
-
-# ─── Per-tile geometric classifiers ──────────────────────────────────────────
-# Each returns a list of (part_info, color, role_name) tuples.
-
-def classify_wheet(parts):
-    """
-    Wheat tile classification:
-    - Base: largest flat hex platform → Yellow (#FFFF00)
-    - Wheat stalks: large flat area (huge XY, very low aspect) → Gold (#FFCC00)
-    - Barn/house: moderate verts, tallest relative to footprint → Red (#C00000)
-    - Trees/bushes: small, roughly spherical → Green (#009900)
-    """
-    base = find_base(parts)
-    rest = [p for p in parts if p is not base]
-
-    result = [(base, p(10), "base")]
-
-    for part in rest:
-        # Wheat field: large vertex count + very flat (aspect < 0.15)
-        if part["vert_count"] > 500 and part["aspect_ratio"] < 0.15:
-            result.append((part, p(5), "wheat_stalks"))
-        # Barn: moderate vertices, tall relative to footprint (aspect > 0.75)
-        # AND not tiny (> 150 verts to exclude small round trees)
-        elif part["vert_count"] > 150 and part["aspect_ratio"] > 0.75:
-            result.append((part, p(4), "barn"))
-        # Flat part high up (roof): low vert count, centroid_z high, flat
-        elif part["centroid_z"] > 8.0 and part["aspect_ratio"] < 0.3:
-            result.append((part, p(4), "barn_roof"))
-        # Trees/bushes: small parts
-        else:
-            result.append((part, p(8), "tree"))
-
-    return result
-
-
-def classify_wool(parts):
-    """
-    Pasture/wool tile classification:
-    - Base: largest → White (#FFFFFF)
-    - Sheep: small-medium roughly equidimensional blobs → White (#FFFFFF)
-    - Building/house: tallest aspect ratio, largest non-base → Brown (#CC6600)
-    - Ground cover: very small + flat → Light green (#66FF33)
-    """
-    base = find_base(parts)
-    rest = [p for p in parts if p is not base]
-
-    result = [(base, p(7), "base")]
-
-    if not rest:
-        return result
-
-    # The largest non-base part is likely the building/house
-    rest_sorted = sorted(rest, key=lambda x: x["vert_count"], reverse=True)
-    building = rest_sorted[0]
-
-    for part in rest:
-        if part is building:
-            result.append((part, p(3), "building"))
-        # Very small + flat = ground cover
-        elif part["vert_count"] < 120 and part["aspect_ratio"] < 0.6:
-            result.append((part, p(6), "ground_cover"))
-        # Everything else = sheep
-        else:
-            result.append((part, p(7), "sheep"))
-
-    return result
-
-
-def classify_wood(parts):
-    """
-    Forest/wood tile classification:
-    - Base: largest → Brown (#CC6600)
-    - Tree canopy / ground features: smaller parts
-      - Larger flat parts → Light green (#66FF33) (ground/undergrowth)
-      - Smaller parts → Green (#009900) (tree details)
-    """
-    base = find_base(parts)
-    rest = [p for p in parts if p is not base]
-
-    result = [(base, p(3), "base")]
-
-    for part in rest:
-        if part["vert_count"] > 100:
-            result.append((part, p(6), "ground"))
-        else:
-            result.append((part, p(8), "tree_detail"))
-
-    return result
-
-
-def classify_brick(parts):
-    """
-    Brick/hills tile classification:
-    - Base: largest → Orange (#FF6600)
-    - Medium features: clay/ground → Beige (#D9CF74)
-    - Smaller features: rock formations → Brown (#CC6600)
-    - Tiny features: brick details → Red (#C00000)
-    """
-    base = find_base(parts)
-    rest = [p for p in parts if p is not base]
-
-    result = [(base, p(1), "base")]
-
-    # Sort by vert count to assign by relative size
-    rest_sorted = sorted(rest, key=lambda x: x["vert_count"], reverse=True)
-
-    for i, part in enumerate(rest_sorted):
-        if part["vert_count"] >= 80:
-            # Larger features = clay ground (Beige)
-            result.append((part, p(2), "clay_ground"))
-        elif part["vert_count"] >= 30:
-            # Medium features = rock formations (Brown)
-            result.append((part, p(3), "rock"))
-        else:
-            # Tiny features = brick details (Red)
-            result.append((part, p(4), "brick_detail"))
-
-    return result
-
-
-def classify_desert(parts):
-    """
-    Desert tile classification:
-    - Base: largest → Gold (#FFCC00)
-    - Feature: rock/cactus → Brown (#CC6600)
-    """
-    base = find_base(parts)
-    rest = [p for p in parts if p is not base]
-
-    result = [(base, p(5), "base")]
-    for part in rest:
-        result.append((part, p(3), "rock_feature"))
-
-    return result
-
-
-TILE_CLASSIFIERS = {
-    "wheet": classify_wheet,
-    "wool": classify_wool,
-    "wood": classify_wood,
-    "brick": classify_brick,
-    "desert": classify_desert,
+TILE_BANDS = {
+    #         _-_1   _-_2   _-_3   _-_4
+    "wool":   [6,     3,     8,     7],   # Light green, Brown, Green, White
+    "wood":   [6,     8,     2,     3],   # Light green, Green, Beige, Brown
+    "wheet":  [5,     10,    4,     8],   # Gold, Yellow, Red, Green
+    "brick":  [2,     3,     8,     4],   # Beige, Brown, Green, Red
+    "ore":    [2,     9,     3,     8],   # Beige, Grey, Brown, Green
+    "desert": [5,     3,     8,     7],   # Gold, Brown, Green, White
+    "water":        [11,    12,    7],    # Blue/green, Turquoise, White (3 bands)
+    "harbor_water": [11,    12,    7],
 }
 
 
-# ─── Painting functions ──────────────────────────────────────────────────────
+def paint_z_bands(obj, bands):
+    """
+    Paint per-vertex colors based on Z-height bands.
 
-def paint_object_solid(obj, color):
-    """Paint all vertex colors of an object with a solid color."""
+    Divides the object's Z range into len(bands) equal slices and assigns
+    each vertex the color of whichever band its Z coordinate falls in.
+    Colors are written per-loop (face corner) as required by Blender.
+    """
     mesh = obj.data
-    if not mesh.color_attributes:
-        mesh.color_attributes.new(name="Col", type='BYTE_COLOR', domain='CORNER')
-    color_attr = mesh.color_attributes["Col"]
-    rgba = (color[0], color[1], color[2], 1.0)
-    for poly in mesh.polygons:
-        for loop_idx in poly.loop_indices:
-            color_attr.data[loop_idx].color = rgba
+    n = len(bands)
 
-
-def paint_object_step(obj, ground_color, feature_color, threshold_pct=0.15):
-    """Paint with hard step function: below threshold% = ground, above = feature."""
-    mesh = obj.data
+    # Compute Z range across all vertices
     zs = [v.co.z for v in mesh.vertices]
     if not zs:
         return
     z_min, z_max = min(zs), max(zs)
     z_range = z_max - z_min
     if z_range < 1e-6:
-        z_range = 1.0
-    cutoff = z_min + z_range * threshold_pct
+        # Flat mesh — use bottom band color
+        band_color = PALETTE[bands[0]]
+        _paint_solid(mesh, band_color)
+        return
 
-    if not mesh.color_attributes:
-        mesh.color_attributes.new(name="Col", type='BYTE_COLOR', domain='CORNER')
-    color_attr = mesh.color_attributes["Col"]
+    # Per-vertex band index
+    vert_band = []
+    for v in mesh.vertices:
+        t = (v.co.z - z_min) / z_range          # 0.0 at bottom, 1.0 at top
+        idx = min(int(t * n), n - 1)             # band 0..n-1
+        vert_band.append(idx)
 
+    # Ensure color attribute exists
+    attr_name = "Col"
+    if attr_name not in mesh.color_attributes:
+        mesh.color_attributes.new(name=attr_name, type='BYTE_COLOR', domain='CORNER')
+    color_attr = mesh.color_attributes[attr_name]
+
+    # Write color per loop (face corner)
     for poly in mesh.polygons:
         for loop_idx in poly.loop_indices:
             vert_idx = mesh.loops[loop_idx].vertex_index
-            z = mesh.vertices[vert_idx].co.z
-            if z < cutoff:
-                color_attr.data[loop_idx].color = (*ground_color, 1.0)
-            else:
-                color_attr.data[loop_idx].color = (*feature_color, 1.0)
+            band_idx = vert_band[vert_idx]
+            c = PALETTE[bands[band_idx]]
+            color_attr.data[loop_idx].color = (c[0], c[1], c[2], 1.0)
 
 
-# Step-function color configs for single-mesh tiles
-STEP_CONFIGS = {
-    "ore":          (p(9), p(2), 0.15),   # Grey base, Beige peaks
-    "water":        (p(11), p(12), 0.50),  # Blue/green base, Turquoise waves
-    "harbor_water": (p(11), p(12), 0.50),  # Blue/green base, Turquoise waves
-}
+def _paint_solid(mesh, color):
+    """Paint the entire mesh a single solid color."""
+    attr_name = "Col"
+    if attr_name not in mesh.color_attributes:
+        mesh.color_attributes.new(name=attr_name, type='BYTE_COLOR', domain='CORNER')
+    color_attr = mesh.color_attributes[attr_name]
+    for poly in mesh.polygons:
+        for loop_idx in poly.loop_indices:
+            color_attr.data[loop_idx].color = (color[0], color[1], color[2], 1.0)
 
 
 def create_vertex_color_material(name):
-    """Create a material that reads vertex colors."""
+    """Material that reads vertex colors → Principled BSDF albedo."""
     mat = bpy.data.materials.new(name=name)
     mat.use_nodes = True
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
-
-    for node in nodes:
+    for node in list(nodes):
         nodes.remove(node)
 
-    output_node = nodes.new("ShaderNodeOutputMaterial")
-    output_node.location = (400, 0)
+    output = nodes.new("ShaderNodeOutputMaterial")
+    output.location = (400, 0)
+    bsdf = nodes.new("ShaderNodeBsdfPrincipled")
+    bsdf.location = (0, 0)
+    bsdf.inputs["Metallic"].default_value = 0.1
+    bsdf.inputs["Roughness"].default_value = 0.8
+    vcol = nodes.new("ShaderNodeVertexColor")
+    vcol.location = (-300, 0)
+    vcol.layer_name = "Col"
 
-    bsdf_node = nodes.new("ShaderNodeBsdfPrincipled")
-    bsdf_node.location = (0, 0)
-    bsdf_node.inputs["Metallic"].default_value = 0.1
-    bsdf_node.inputs["Roughness"].default_value = 0.8
-
-    color_node = nodes.new("ShaderNodeVertexColor")
-    color_node.location = (-300, 0)
-    color_node.layer_name = "Col"
-
-    links.new(color_node.outputs["Color"], bsdf_node.inputs["Base Color"])
-    links.new(bsdf_node.outputs["BSDF"], output_node.inputs["Surface"])
-
+    links.new(vcol.outputs["Color"], bsdf.inputs["Base Color"])
+    links.new(bsdf.outputs["BSDF"], output.inputs["Surface"])
     return mat
 
 
 def clear_scene():
-    """Remove all objects, meshes, materials from the scene."""
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
     for block in bpy.data.meshes:
@@ -336,120 +171,34 @@ def clear_scene():
         bpy.data.materials.remove(block)
 
 
-def process_tile(stl_name, tile_type):
-    """Import STL, separate by loose parts, color per component, export GLB."""
-    stl_path = os.path.join(ASSETS_DIR, stl_name)
+def process_tile(tile_type):
+    stl_path = os.path.join(ASSETS_DIR, tile_type + ".stl")
+    glb_path = os.path.join(ASSETS_DIR, tile_type + ".glb")
+
     if not os.path.exists(stl_path):
-        print(f"WARNING: {stl_path} not found, skipping")
-        return None
+        print(f"  WARNING: {stl_path} not found, skipping")
+        return
 
-    tile_name = os.path.splitext(stl_name)[0]
-    glb_path = os.path.join(ASSETS_DIR, tile_name + ".glb")
-
-    print(f"\n{'='*60}")
-    print(f"Processing: {stl_name} → {tile_name}.glb")
-    print(f"{'='*60}")
-
+    print(f"\nProcessing: {tile_type}.stl → {tile_type}.glb")
     clear_scene()
 
-    # Import STL
     bpy.ops.wm.stl_import(filepath=stl_path)
     obj = bpy.context.selected_objects[0]
-    obj.name = tile_name
+    obj.name = tile_type
 
-    total_verts = len(obj.data.vertices)
-    total_faces = len(obj.data.polygons)
-    print(f"  Total vertices: {total_verts}, faces: {total_faces}")
+    bands = TILE_BANDS[tile_type]
+    zs = [v.co.z for v in obj.data.vertices]
+    print(f"  Vertices: {len(obj.data.vertices)}  Z range: {min(zs):.2f}..{max(zs):.2f}  Bands: {bands}")
 
-    # Make sure this is the active object
-    bpy.context.view_layer.objects.active = obj
-    obj.select_set(True)
+    paint_z_bands(obj, bands)
 
-    # Try to separate by loose parts
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.mesh.separate(type='LOOSE')
-    bpy.ops.object.mode_set(mode='OBJECT')
+    mat = create_vertex_color_material(f"mat_{tile_type}")
+    obj.data.materials.clear()
+    obj.data.materials.append(mat)
 
-    # Gather all parts
-    parts_objs = list(bpy.context.selected_objects)
-    num_parts = len(parts_objs)
-    print(f"  Loose parts: {num_parts}")
-
-    used_fallback = False
-
-    if tile_type in STEP_CONFIGS:
-        # Single-mesh step-function tiles (ore, water, harbor_water)
-        print(f"  → Step-function coloring for {tile_type}")
-        used_fallback = True
-        ground, feature, threshold = STEP_CONFIGS[tile_type]
-        for obj in parts_objs:
-            paint_object_step(obj, ground, feature, threshold)
-
-    elif tile_type in TILE_CLASSIFIERS and num_parts > 1:
-        # Multi-part tiles with geometry-based classification
-        part_infos = []
-        for obj in parts_objs:
-            info = get_part_info(obj)
-            if info:
-                part_infos.append(info)
-
-        classifier = TILE_CLASSIFIERS[tile_type]
-        assignments = classifier(part_infos)
-
-        for part_info, color, role in assignments:
-            print(f"  {role}: verts={part_info['vert_count']}, "
-                  f"aspect={part_info['aspect_ratio']:.3f}, "
-                  f"centroid_z={part_info['centroid_z']:.2f} → "
-                  f"color=({color[0]:.3f},{color[1]:.3f},{color[2]:.3f})")
-            paint_object_solid(part_info["obj"], color)
-
-    elif num_parts <= 1:
-        # Single connected mesh without step config — use first palette color
-        print(f"  → Single connected mesh, using step-function fallback")
-        used_fallback = True
-        obj = parts_objs[0] if parts_objs else bpy.context.selected_objects[0]
-        # Default: use first two colors from old config
-        ground_color = p(9)  # Grey
-        feature_color = p(2)  # Beige
-        paint_object_step(obj, ground_color, feature_color, 0.15)
-
-    else:
-        # Multi-part tile without specific classifier — fallback to size-order
-        print(f"  → No specific classifier for {tile_type}, using size-order fallback")
-        used_fallback = True
-        part_infos = []
-        for obj in parts_objs:
-            info = get_part_info(obj)
-            if info:
-                part_infos.append(info)
-        part_infos.sort(key=lambda x: x["vert_count"], reverse=True)
-        # Just paint everything the same base color
-        for pi in part_infos:
-            paint_object_solid(pi["obj"], p(11))
-
-    # Create and assign material
-    mat = create_vertex_color_material(f"mat_{tile_name}")
-
-    # Select all parts and assign material
-    bpy.ops.object.select_all(action='SELECT')
-    for obj in bpy.context.selected_objects:
-        obj.data.materials.clear()
-        obj.data.materials.append(mat)
-
-    # Join all parts back into one
-    bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
-    bpy.ops.object.join()
-
-    # Rename joined object
-    joined = bpy.context.active_object
-    joined.name = tile_name
-    joined.data.name = tile_name
-
-    # Export as GLB
     bpy.ops.object.select_all(action="DESELECT")
-    joined.select_set(True)
-    bpy.context.view_layer.objects.active = joined
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
 
     bpy.ops.export_scene.gltf(
         filepath=glb_path,
@@ -460,33 +209,13 @@ def process_tile(stl_name, tile_type):
         export_normals=True,
         export_apply=True,
     )
-
     print(f"  ✓ Exported: {glb_path}")
-    return {"tile": tile_name, "parts": num_parts, "fallback": used_fallback}
 
-
-# ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    print(f"\nBlender geometry-based vertex color pipeline")
-    print(f"Assets dir: {ASSETS_DIR}")
-
     tiles = ["wool", "wood", "wheet", "brick", "ore", "desert", "water", "harbor_water"]
-    results = []
-
     for tile_type in tiles:
-        result = process_tile(tile_type + ".stl", tile_type)
-        if result:
-            results.append(result)
+        process_tile(tile_type)
+    print("\nDone.")
 
-    print(f"\n{'='*60}")
-    print("Summary:")
-    print(f"{'='*60}")
-    for r in results:
-        fb = " (step-function)" if r["fallback"] else " (geometry-classified)"
-        print(f"  {r['tile']}: {r['parts']} components{fb}")
-    print("All tiles processed!")
-
-
-if __name__ == "__main__":
-    main()
+main()
