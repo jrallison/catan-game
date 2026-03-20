@@ -30,12 +30,10 @@ const TOKEN_Y_LIFT = 0.01
 const TOKEN_DIAMETER = DEPRESSION_RADIUS * 2 * 0.9
 
 /** Token height in world units (slight 3D depth). */
-const TOKEN_HEIGHT = 0.15
+const TOKEN_HEIGHT = 0.04
 
 /** Cached materials (created once per scene). */
 let bodyMaterial: PBRMaterial | null = null
-let edgeMaterial: PBRMaterial | null = null
-
 function getBodyMaterial(scene: Scene): PBRMaterial {
   if (bodyMaterial) return bodyMaterial
   const mat = new PBRMaterial('mat_tokenBody', scene)
@@ -43,16 +41,6 @@ function getBodyMaterial(scene: Scene): PBRMaterial {
   mat.metallic = 0.05
   mat.roughness = 0.85
   bodyMaterial = mat
-  return mat
-}
-
-function getEdgeMaterial(scene: Scene): PBRMaterial {
-  if (edgeMaterial) return edgeMaterial
-  const mat = new PBRMaterial('mat_tokenEdge', scene)
-  mat.albedoColor = Color3.FromHexString('#FF6600')
-  mat.metallic = 0.05
-  mat.roughness = 0.7
-  edgeMaterial = mat
   return mat
 }
 
@@ -73,15 +61,6 @@ export async function renderNumberTokens(scene: Scene, tiles: HexTile[]): Promis
     }, scene)
     body.position.set(posX, posY, posZ)
     body.material = getBodyMaterial(scene)
-
-    // --- Orange edge ring (slightly larger diameter, slightly shorter) ---
-    const edgeRing = MeshBuilder.CreateTorus(`tokenEdge_${tile.q}_${tile.r}`, {
-      diameter: TOKEN_DIAMETER,
-      thickness: 0.04,
-      tessellation: 32,
-    }, scene)
-    edgeRing.position.set(posX, posY + TOKEN_HEIGHT / 2 - 0.01, posZ)
-    edgeRing.material = getEdgeMaterial(scene)
 
     // --- White top face disc with number + dots via DynamicTexture ---
     const textureSize = 512
@@ -107,17 +86,17 @@ export async function renderNumberTokens(scene: Scene, tiles: HexTile[]): Promis
     const textColor = isHighProb ? '#C00000' : '#000000'
 
     ctx.fillStyle = textColor
-    ctx.font = `bold ${isHighProb ? 140 : 120}px Arial`
+    ctx.font = `bold ${isHighProb ? 280 : 240}px Arial`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(String(tile.number), textureSize / 2, textureSize / 2 - 30)
+    ctx.fillText(String(tile.number), textureSize / 2, textureSize / 2 - 50)
 
     // Probability dots
     const dots = PROBABILITY_DOTS[tile.number] || 0
-    const dotRadius = 8
-    const dotSpacing = 22
+    const dotRadius = 16
+    const dotSpacing = 44
     const dotsStartX = textureSize / 2 - ((dots - 1) * dotSpacing) / 2
-    const dotsY = textureSize / 2 + 70
+    const dotsY = textureSize / 2 + 110
 
     ctx.fillStyle = textColor
     for (let i = 0; i < dots; i++) {
