@@ -7,6 +7,7 @@ async function main(): Promise<void> {
   const canvas = document.getElementById('renderCanvas') as HTMLCanvasElement
   const { engine, scene } = createScene(canvas)
 
+
   // Create the standard Catan board
   const board = createStandardBoard()
 

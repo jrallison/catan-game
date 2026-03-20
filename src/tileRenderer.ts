@@ -1,4 +1,4 @@
-import { Scene, PBRMaterial, Color3, SceneLoader, Mesh, Vector3 } from '@babylonjs/core'
+import { Scene, PBRMaterial, Color3, SceneLoader, Mesh, Vector3, VertexBuffer } from '@babylonjs/core'
 import '@babylonjs/loaders/STL'
 import { HexTile, TileType } from './types'
 import { axialToWorld } from './board'
@@ -37,8 +37,10 @@ function hexColorToColor3(hex: string): Color3 {
 // Cache for loaded STL meshes (one per tile type)
 const meshCache: Map<TileType, Mesh> = new Map()
 
-// Target radius for a tile to fit within a hex cell
-const TARGET_TILE_DIAMETER = 4.0 // ~2.0 unit radius → 4.0 diameter
+// Target corner-to-corner diameter for a hex tile.
+// axialToWorld(size=2.1) → adjacent centers 2.1*sqrt(3) ≈ 3.637 apart (edge-to-edge).
+// For a regular hex, corner-to-corner = edge-to-edge / (sqrt(3)/2) ≈ 3.637 / 0.866 ≈ 4.2
+const TARGET_TILE_DIAMETER = 4.2
 
 async function loadTileMesh(scene: Scene, tileType: TileType): Promise<Mesh> {
   const cached = meshCache.get(tileType)
@@ -48,32 +50,64 @@ async function loadTileMesh(scene: Scene, tileType: TileType): Promise<Mesh> {
 
   const stlFile = TILE_STL_MAP[tileType]
   const result = await SceneLoader.ImportMeshAsync('', '/assets/', stlFile, scene)
-  const mesh = result.meshes[0] as Mesh
 
-  // STL files from 3D printing are typically Z-up; Babylon.js is Y-up.
-  // Rotate -90° around X to convert Z-up → Y-up (flat on XZ plane).
-  mesh.rotation = new Vector3(-Math.PI / 2, 0, 0)
-  // Bake the rotation into vertices so clones inherit correct geometry
-  mesh.bakeCurrentTransformIntoVertices()
+  // STL loader may return a parent TransformNode at [0] with geometry in [1]+.
+  // Find the first mesh that actually has vertex data.
+  let mesh: Mesh | null = null
+  for (const m of result.meshes) {
+    const asMesh = m as Mesh
+    if (asMesh.getVerticesData && asMesh.getVerticesData(VertexBuffer.PositionKind)) {
+      mesh = asMesh
+      break
+    }
+  }
+  if (!mesh) {
+    mesh = result.meshes[0] as Mesh
+  }
 
-  // Compute bounding box and auto-scale to fit within hex cell
+  const pos = mesh.getVerticesData(VertexBuffer.PositionKind)!
+
+  // Compute raw bounds from vertex data
+  let xMin = Infinity, xMax = -Infinity
+  let yMin = Infinity, yMax = -Infinity
+  let zMin = Infinity, zMax = -Infinity
+  for (let i = 0; i < pos.length; i += 3) {
+    xMin = Math.min(xMin, pos[i]);     xMax = Math.max(xMax, pos[i])
+    yMin = Math.min(yMin, pos[i + 1]); yMax = Math.max(yMax, pos[i + 1])
+    zMin = Math.min(zMin, pos[i + 2]); zMax = Math.max(zMax, pos[i + 2])
+  }
+
+  // Babylon's STL loader already converts Z-up → Y-up.
+  // Loaded vertices are already in Y-up: X & Z are horizontal, Y is terrain height.
+  // No rotation needed — just scale and center.
+  const xExtent = xMax - xMin   // horizontal width (corner-to-corner)
+  const zExtent = zMax - zMin   // horizontal depth (edge-to-edge)
+  const maxHoriz = Math.max(xExtent, zExtent)
+  const s = TARGET_TILE_DIAMETER / maxHoriz
+
+  const cx = (xMin + xMax) / 2
+  const cy = yMin               // base of terrain → Y=0
+  const cz = (zMin + zMax) / 2
+
+  // Scale and center in one pass (no rotation needed)
+  for (let i = 0; i < pos.length; i += 3) {
+    pos[i]     = (pos[i] - cx) * s
+    pos[i + 1] = (pos[i + 1] - cy) * s
+    pos[i + 2] = (pos[i + 2] - cz) * s
+  }
+  mesh.updateVerticesData(VertexBuffer.PositionKind, pos)
+
+  // Clear any mesh transform — geometry is already transformed
+  mesh.rotationQuaternion = null
+  mesh.rotation.copyFromFloats(0, 0, 0)
+  mesh.scaling.copyFromFloats(1, 1, 1)
+  mesh.position.copyFromFloats(0, 0, 0)
   mesh.refreshBoundingInfo()
-  const bounds = mesh.getBoundingInfo().boundingBox
-  const extents = bounds.maximumWorld.subtract(bounds.minimumWorld)
-  // Use the largest horizontal dimension (X or Z) to determine scale
-  const maxHorizontal = Math.max(extents.x, extents.z)
-  const scaleFactor = maxHorizontal > 0 ? TARGET_TILE_DIAMETER / maxHorizontal : 1
-  mesh.scaling.setAll(scaleFactor)
-  mesh.bakeCurrentTransformIntoVertices()
 
-  // Re-center the mesh so its bounding box center sits at the origin
-  mesh.refreshBoundingInfo()
-  const newBounds = mesh.getBoundingInfo().boundingBox
-  const center = newBounds.centerWorld
-  mesh.position = new Vector3(-center.x, -center.y, -center.z)
-  mesh.bakeCurrentTransformIntoVertices()
+  // Detach from any parent TransformNode to avoid inheriting transforms
+  mesh.parent = null
 
-  // Hide the original - we'll clone it
+  // Hide the original — we'll clone it
   mesh.setEnabled(false)
   mesh.name = `template_${tileType}`
   meshCache.set(tileType, mesh)
@@ -120,12 +154,14 @@ export async function renderTiles(scene: Scene, tiles: HexTile[]): Promise<void>
     if (!instance) continue
 
     instance.setEnabled(true)
+    instance.parent = null
+    instance.rotationQuaternion = null
+    instance.rotation.copyFromFloats(0, 0, 0)
+    instance.scaling.copyFromFloats(1, 1, 1)
 
     // Position using axial-to-world conversion
     const { x, z } = axialToWorld(tile.q, tile.r)
-    instance.position.x = x
-    instance.position.z = z
-    instance.position.y = 0
+    instance.position.set(x, 0, z)
 
     // Apply material
     instance.material = getOrCreateMaterial(scene, tile.type)
