@@ -204,7 +204,34 @@ async function loadTemplateMesh(scene: Scene, tileType: TileType): Promise<Mesh>
   const positions = new Float32Array(rawPositions)
   const normals   = rawNormals ? new Float32Array(rawNormals) : null
 
-  // Step 3: Bake Y rotation into vertex data (water/harbor: pointy-top → flat-top)
+  // Step 3a: Fix Blender GLB Z-axis negation.
+  //
+  // Blender exports GLTF with Y-up by converting its native Z-up space as:
+  //   Blender-X → GLTF-X, Blender-Y → GLTF -Z, Blender-Z → GLTF-Y
+  // Babylon's STL loader did: STL-X → X, STL-Y → +Z, STL-Z → Y
+  // So the GLB Z = -(STL loader Z). Two consequences we must undo:
+  //   1. Geometry is mirrored along Z → depression shifts to wrong position
+  //   2. Mirroring flips triangle winding order → normals invert → backface culling
+  //      makes front faces invisible (the "see-through" bug)
+  for (let i = 0; i < positions.length; i += 3) {
+    positions[i + 2] = -positions[i + 2]
+  }
+  if (normals) {
+    for (let i = 0; i < normals.length; i += 3) {
+      normals[i + 2] = -normals[i + 2]
+    }
+  }
+  // Restore winding order: negate-Z mirrors → swap vertex 1 and 2 in each triangle
+  const fixedIndices = indices ? new Int32Array(indices) : null
+  if (fixedIndices) {
+    for (let i = 0; i < fixedIndices.length; i += 3) {
+      const tmp = fixedIndices[i + 1]
+      fixedIndices[i + 1] = fixedIndices[i + 2]
+      fixedIndices[i + 2] = tmp
+    }
+  }
+
+  // Step 3b: Bake Y rotation into vertex data (water/harbor: pointy-top → flat-top)
   const yRotation = TILE_Y_ROTATION[tileType] ?? 0
   if (yRotation !== 0) {
     rotateVectorsAroundY(positions, yRotation)
@@ -227,7 +254,8 @@ async function loadTemplateMesh(scene: Scene, tileType: TileType): Promise<Mesh>
   vertexData.positions = positions
   if (normals) vertexData.normals = normals
   if (rawColors) vertexData.colors = new Float32Array(rawColors)
-  if (indices) vertexData.indices = indices
+  if (fixedIndices) vertexData.indices = fixedIndices
+  else if (indices) vertexData.indices = indices
   vertexData.applyToMesh(templateMesh, /* updatable */ true)
 
   // Reset transform so the mesh is purely defined by its baked vertex data
