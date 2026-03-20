@@ -1,4 +1,4 @@
-import { Scene, PBRMaterial, Color3, SceneLoader, Mesh, Vector3 } from '@babylonjs/core'
+import { Scene, PBRMaterial, Color3, SceneLoader, Mesh, Vector3, TransformNode } from '@babylonjs/core'
 import '@babylonjs/loaders/STL'
 import { HexTile, TileType } from './types'
 import { axialToWorld } from './board'
@@ -15,7 +15,6 @@ const TILE_COLORS: Record<TileType, string> = {
   harbor_water: '#1a5fa8',
 }
 
-// Map tile type to STL filename (note: wheat -> wheet.stl per Thingiverse naming)
 const TILE_STL_MAP: Record<TileType, string> = {
   wood: 'wood.stl',
   wool: 'wool.stl',
@@ -34,51 +33,49 @@ function hexColorToColor3(hex: string): Color3 {
   return new Color3(r, g, b)
 }
 
-// Cache for loaded STL meshes (one per tile type)
-const meshCache: Map<TileType, Mesh> = new Map()
+interface TileTemplate {
+  mesh: Mesh
+  yOffset: number
+  scale: number
+}
 
-// Target radius for a tile to fit within a hex cell
-const TARGET_TILE_DIAMETER = 4.0 // ~2.0 unit radius → 4.0 diameter
+const meshCache: Map<TileType, TileTemplate> = new Map()
 
-async function loadTileMesh(scene: Scene, tileType: TileType): Promise<Mesh> {
+const TARGET_TILE_DIAMETER = 4.0
+
+async function loadTileMesh(scene: Scene, tileType: TileType): Promise<TileTemplate> {
   const cached = meshCache.get(tileType)
-  if (cached) {
-    return cached
-  }
+  if (cached) return cached
 
   const stlFile = TILE_STL_MAP[tileType]
   const result = await SceneLoader.ImportMeshAsync('', '/assets/', stlFile, scene)
-  const mesh = result.meshes[0] as Mesh
 
-  // STL files from 3D printing are typically Z-up; Babylon.js is Y-up.
-  // Rotate -90° around X to convert Z-up → Y-up (flat on XZ plane).
-  mesh.rotation = new Vector3(Math.PI / 2, 0, 0)
-  // Bake the rotation into vertices so clones inherit correct geometry
-  mesh.bakeCurrentTransformIntoVertices()
+  // Find the mesh with actual geometry (may not be index 0)
+  const mesh = (result.meshes.find(m => m instanceof Mesh && (m as Mesh).getTotalVertices() > 0) ?? result.meshes[0]) as Mesh
 
-  // Compute bounding box and auto-scale to fit within hex cell
+  // Compute raw bounding box to determine scale and centering
   mesh.refreshBoundingInfo()
-  const bounds = mesh.getBoundingInfo().boundingBox
-  const extents = bounds.maximumWorld.subtract(bounds.minimumWorld)
-  // Use the largest horizontal dimension (X or Z) to determine scale
-  const maxHorizontal = Math.max(extents.x, extents.z)
-  const scaleFactor = maxHorizontal > 0 ? TARGET_TILE_DIAMETER / maxHorizontal : 1
-  mesh.scaling.setAll(scaleFactor)
-  mesh.bakeCurrentTransformIntoVertices()
+  const bb = mesh.getBoundingInfo().boundingBox
+  const extents = bb.maximum.subtract(bb.minimum)
 
-  // Re-center the mesh so its bounding box center sits at the origin
-  mesh.refreshBoundingInfo()
-  const newBounds = mesh.getBoundingInfo().boundingBox
-  const center = newBounds.centerWorld
-  mesh.position = new Vector3(-center.x, -center.y, -center.z)
-  mesh.bakeCurrentTransformIntoVertices()
+  // Tiles from this Thingiverse set are exported Z-up (flat hex in XY plane).
+  // After a -90° X rotation the hex face points +Y (flat on floor).
+  // We store the rotation and scale as metadata and apply at clone time.
+  // Use the largest of X/Y (the pre-rotation horizontal dims) to scale.
+  const maxHoriz = Math.max(extents.x, extents.y)
+  const scale = maxHoriz > 0 ? TARGET_TILE_DIAMETER / maxHoriz : 1
 
-  // Hide the original - we'll clone it
+  // Y offset: after -90° X rotation, old Z becomes new Y.
+  // Center of old Z range → needs to sit at y=0 post-rotation.
+  const zCenter = (bb.minimum.z + bb.maximum.z) / 2
+  const yOffset = -zCenter * scale
+
   mesh.setEnabled(false)
   mesh.name = `template_${tileType}`
-  meshCache.set(tileType, mesh)
 
-  return mesh
+  const template: TileTemplate = { mesh, yOffset, scale }
+  meshCache.set(tileType, template)
+  return template
 }
 
 function createTileMaterial(scene: Scene, tileType: TileType): PBRMaterial {
@@ -86,15 +83,10 @@ function createTileMaterial(scene: Scene, tileType: TileType): PBRMaterial {
   mat.albedoColor = hexColorToColor3(TILE_COLORS[tileType])
   mat.metallic = 0.1
   mat.roughness = 0.8
-
-  if (tileType === 'water' || tileType === 'harbor_water') {
-    mat.alpha = 0.85
-  }
-
+  if (tileType === 'water' || tileType === 'harbor_water') mat.alpha = 0.85
   return mat
 }
 
-// Material cache
 const materialCache: Map<TileType, PBRMaterial> = new Map()
 
 function getOrCreateMaterial(scene: Scene, tileType: TileType): PBRMaterial {
@@ -107,27 +99,27 @@ function getOrCreateMaterial(scene: Scene, tileType: TileType): PBRMaterial {
 }
 
 export async function renderTiles(scene: Scene, tiles: HexTile[]): Promise<void> {
-  // Pre-load all unique tile type meshes
   const uniqueTypes = [...new Set(tiles.map(t => t.type))]
   await Promise.all(uniqueTypes.map(type => loadTileMesh(scene, type)))
 
-  // Place each tile
   for (const tile of tiles) {
-    const template = meshCache.get(tile.type)
-    if (!template) continue
+    const tmpl = meshCache.get(tile.type)
+    if (!tmpl) continue
 
-    const instance = template.clone(`tile_${tile.q}_${tile.r}`)
+    const instance = tmpl.mesh.clone(`tile_${tile.q}_${tile.r}`)
     if (!instance) continue
 
     instance.setEnabled(true)
 
-    // Position using axial-to-world conversion
+    // Apply rotation to lay flat: -90° around X (Z-up STL → Y-up Babylon)
+    instance.rotation = new Vector3(-Math.PI / 2, 0, 0)
+    instance.scaling.setAll(tmpl.scale)
+
     const { x, z } = axialToWorld(tile.q, tile.r)
     instance.position.x = x
+    instance.position.y = tmpl.yOffset
     instance.position.z = z
-    instance.position.y = 0
 
-    // Apply material
     instance.material = getOrCreateMaterial(scene, tile.type)
   }
 }
