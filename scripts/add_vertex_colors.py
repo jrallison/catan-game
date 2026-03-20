@@ -31,118 +31,58 @@ def hex_to_linear(h):
     return (srgb_to_linear(r), srgb_to_linear(g), srgb_to_linear(b))
 
 
-# ─── Per-tile color classification ───────────────────────────────────────────
+# ─── Color palette from Color-composition.pdf ────────────────────────────────
+# Colors listed as approximate filament descriptions. No exact RGB in the doc;
+# these are faithful digital approximations of the named colors.
+# Index matches the number system in the PDF (1–12).
 
-def classify_wool(part_info, is_base):
-    """Pasture tile: green base, white sheep, grey buildings, green bushes."""
-    if is_base:
-        return hex_to_linear("#7ecf3f")
-    z_span = part_info["z_span"]
-    centroid_z = part_info["centroid_z"]
-    vert_count = part_info["vert_count"]
-    # Sheep: low flat shapes
-    if z_span < 5:
-        return hex_to_linear("#f0f0f0")
-    # Buildings: moderate vertex count, moderate height
-    if vert_count > 100 and centroid_z > 3:
-        return hex_to_linear("#8a8a8a")
-    # Bushes / vegetation
-    return hex_to_linear("#5aaa28")
-
-
-def classify_wood(part_info, is_base):
-    """Forest tile: green base, brown trunks, dark green canopy."""
-    if is_base:
-        return hex_to_linear("#4a8c2a")
-    centroid_z = part_info["centroid_z"]
-    z_span = part_info["z_span"]
-    xy_span = part_info["xy_span"]
-    # Tree trunks: tall and thin (z_span >> xy_span)
-    if z_span > 2 and xy_span < z_span * 0.6:
-        return hex_to_linear("#5c3a1e")
-    # Tree canopy: high centroid, bulbous
-    if centroid_z > 5:
-        return hex_to_linear("#2d5a1a")
-    # Default: darker green
-    return hex_to_linear("#2d5a1a")
-
-
-def classify_wheet(part_info, is_base):
-    """Wheat tile: golden base, golden stalks, light yellow tips."""
-    if is_base:
-        return hex_to_linear("#c8a832")
-    centroid_z = part_info["centroid_z"]
-    if centroid_z > 8:
-        return hex_to_linear("#f0d870")
-    return hex_to_linear("#e8c84a")
-
-
-def classify_brick(part_info, is_base):
-    """Hills tile: tan base, terra cotta formations, brick red details."""
-    if is_base:
-        return hex_to_linear("#c4a26b")
-    vert_count = part_info["vert_count"]
-    if vert_count < 50:
-        return hex_to_linear("#8b3020")
-    return hex_to_linear("#a0432a")
-
-
-def classify_ore(part_info, is_base):
-    """Mountains tile: charcoal base, grey slopes, white peaks."""
-    if is_base:
-        return hex_to_linear("#3a3a3a")
-    centroid_z = part_info["centroid_z"]
-    if centroid_z > 10:
-        return hex_to_linear("#dde8ee")
-    return hex_to_linear("#6b7c8c")
-
-
-def classify_desert(part_info, is_base):
-    """Desert: uniform sandy tan with slight height variation."""
-    centroid_z = part_info["centroid_z"]
-    # Slight variation: darker at base, lighter up top
-    t = min(1.0, centroid_z / 15.0) if centroid_z > 0 else 0.0
-    base = hex_to_linear("#c09a50")
-    top = hex_to_linear("#d4b86a")
-    return (
-        base[0] + (top[0] - base[0]) * t,
-        base[1] + (top[1] - base[1]) * t,
-        base[2] + (top[2] - base[2]) * t,
-    )
-
-
-def classify_water(part_info, is_base):
-    """Water: deep cobalt base, cyan wave crests."""
-    if is_base:
-        return hex_to_linear("#1a5fa8")
-    centroid_z = part_info["centroid_z"]
-    if centroid_z > 2:
-        return hex_to_linear("#2ab8d4")
-    return hex_to_linear("#1a5fa8")
-
-
-TILE_CLASSIFIERS = {
-    "wool": classify_wool,
-    "wood": classify_wood,
-    "wheet": classify_wheet,
-    "brick": classify_brick,
-    "ore": classify_ore,
-    "desert": classify_desert,
-    "water": classify_water,
-    "harbor_water": classify_water,
+PALETTE = {
+    1:  "#E8602C",  # Orange
+    2:  "#E8D5A0",  # Beige
+    3:  "#6B4423",  # Brown
+    4:  "#CC2200",  # Red
+    5:  "#C8961E",  # Gold
+    6:  "#7FBF3F",  # Light green
+    7:  "#F5F5F5",  # White
+    8:  "#3A7A3A",  # Green
+    9:  "#6B7C8C",  # Grey
+    10: "#F0C820",  # Yellow
+    11: "#1A6FA8",  # Blue/green
+    12: "#20B0C0",  # Turquoise
 }
 
-# Fallback ground/feature colors for step-function (single connected mesh)
-TILE_FALLBACK_COLORS = {
-    "wool": (hex_to_linear("#7ecf3f"), hex_to_linear("#5aaa28")),
-    "wood": (hex_to_linear("#4a8c2a"), hex_to_linear("#2d5a1a")),
-    "wheet": (hex_to_linear("#c8a832"), hex_to_linear("#e8c84a")),
-    "brick": (hex_to_linear("#c4a26b"), hex_to_linear("#a0432a")),
-    "ore": (hex_to_linear("#3a3a3a"), hex_to_linear("#6b7c8c")),
-    "desert": (hex_to_linear("#c09a50"), hex_to_linear("#d4b86a")),
-    "water": (hex_to_linear("#1a5fa8"), hex_to_linear("#2ab8d4")),
-    "harbor_water": (hex_to_linear("#1a5fa8"), hex_to_linear("#2ab8d4")),
+def p(n):
+    """Return linear RGB tuple for palette color n."""
+    return hex_to_linear(PALETTE[n])
+
+# Per-tile ordered color lists from Color-composition.pdf.
+# Parts are sorted largest→smallest by vertex count; index 0 is the base.
+# If a tile has more parts than listed, the last color repeats.
+# Doc source: "Landscape-bases" (index 0) + named part assignments (_1.._4).
+#
+# wool:   base=7(White), parts: 6,3,8,7  → White base, Light-green/Brown/Green/White features
+# wood:   base=3(Brown), parts: 6,8,2,3  → Brown base, Light-green/Green/Beige/Brown features
+# wheet:  base=10(Yellow),parts:5,10,4,8 → Yellow base, Gold/Yellow/Red/Green features
+# brick:  base=1(Orange), parts: 2,3,8,4 → Orange base, Beige/Brown/Green/Red features
+# ore:    base=9(Grey),  parts: 2,9,3,8  → Grey base,  Beige/Grey/Brown/Green features
+# desert: base=5(Gold),  parts: 5,3,8,7  → Gold base,  Gold/Brown/Green/White features
+# water:  base=11,        parts: 11,12,7  → Blue/green base, Blue/Turquoise/White features
+
+TILE_PART_COLORS = {
+    "wool":         [p(7), p(6), p(3), p(8), p(7)],
+    "wood":         [p(3), p(6), p(8), p(2), p(3)],
+    "wheet":        [p(10), p(5), p(10), p(4), p(8)],
+    "brick":        [p(1), p(2), p(3), p(8), p(4)],
+    "ore":          [p(9), p(2), p(9), p(3), p(8)],
+    "desert":       [p(5), p(5), p(3), p(8), p(7)],
+    "water":        [p(11), p(11), p(12), p(7)],
+    "harbor_water": [p(11), p(11), p(12), p(7)],
 }
+
+def get_part_color(tile_type, part_index):
+    """Return the color for the nth part (0=base, 1..n=features)."""
+    colors = TILE_PART_COLORS[tile_type]
+    return colors[min(part_index, len(colors) - 1)]
 
 
 def get_part_info(obj):
@@ -289,15 +229,15 @@ def process_tile(stl_name, tile_type):
     num_parts = len(parts)
     print(f"  Loose parts: {num_parts}")
 
-    classifier = TILE_CLASSIFIERS[tile_type]
     used_fallback = False
 
     if num_parts <= 1:
-        # Single connected mesh — use step-function fallback
+        # Single connected mesh — use step-function fallback with doc palette colors
         print(f"  → Single connected mesh, using step-function fallback")
         used_fallback = True
         obj = parts[0] if parts else bpy.context.selected_objects[0]
-        ground_color, feature_color = TILE_FALLBACK_COLORS[tile_type]
+        ground_color = get_part_color(tile_type, 0)
+        feature_color = get_part_color(tile_type, 1)
         paint_object_step(obj, ground_color, feature_color, threshold_pct=0.15)
     else:
         # Multiple loose parts — classify each
@@ -307,15 +247,13 @@ def process_tile(stl_name, tile_type):
             info["obj"] = p
             part_infos.append(info)
 
-        # Sort by vertex count descending; largest = base
+        # Sort by vertex count descending; largest = base (index 0)
         part_infos.sort(key=lambda x: x["vert_count"], reverse=True)
 
         for i, pi in enumerate(part_infos):
-            is_base = (i == 0)
-            color = classifier(pi, is_base)
-            role = "BASE" if is_base else f"part#{i}"
-            print(f"  {role}: verts={pi['vert_count']}, centroid_z={pi['centroid_z']:.2f}, "
-                  f"z_span={pi['z_span']:.2f}, xy_span={pi['xy_span']:.2f} → "
+            color = get_part_color(tile_type, i)
+            role = "BASE" if i == 0 else f"part#{i}"
+            print(f"  {role}: verts={pi['vert_count']}, centroid_z={pi['centroid_z']:.2f} → "
                   f"color=({color[0]:.3f},{color[1]:.3f},{color[2]:.3f})")
             paint_object_solid(pi["obj"], color)
 
