@@ -415,21 +415,8 @@ function placeTileInstance(scene: Scene, tile: HexTile, template: Mesh): void {
 
   instance.material = getOrCreateMaterial(scene, tile.type)
 
-  // Place landscape base ring at the same position
-  const baseTemplate = baseTemplateCache.get(tile.type)
-  if (baseTemplate) {
-    const baseInstance = baseTemplate.clone(`base_${tile.q}_${tile.r}`)
-    if (baseInstance) {
-      baseInstance.setEnabled(true)
-      baseInstance.parent = null
-      baseInstance.rotationQuaternion = null
-      baseInstance.rotation.copyFromFloats(0, 0, 0)
-      baseInstance.scaling.copyFromFloats(1, 1, 1)
-      baseInstance.position.set(x, 0, z)
-      baseInstance.useVertexColors = true
-      // Material is already assigned on the template and cloned
-    }
-  }
+  // TODO: place landscape base ring here once spacing is determined
+  // See baseTemplateCache — bases are loaded but not rendered
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
