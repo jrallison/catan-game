@@ -52,7 +52,7 @@ async function loadTileMesh(scene: Scene, tileType: TileType): Promise<Mesh> {
 
   // STL files from 3D printing are typically Z-up; Babylon.js is Y-up.
   // Rotate -90° around X to convert Z-up → Y-up (flat on XZ plane).
-  mesh.rotation = new Vector3(-Math.PI / 2, 0, 0)
+  mesh.rotation = new Vector3(Math.PI / 2, 0, 0)
   // Bake the rotation into vertices so clones inherit correct geometry
   mesh.bakeCurrentTransformIntoVertices()
 
