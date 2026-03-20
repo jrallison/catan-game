@@ -1,4 +1,4 @@
-import { Scene, PBRMaterial, Color3, SceneLoader, Mesh, Vector3, TransformNode } from '@babylonjs/core'
+import { Scene, PBRMaterial, Color3, SceneLoader, Mesh, Vector3, VertexBuffer } from '@babylonjs/core'
 import '@babylonjs/loaders/STL'
 import { HexTile, TileType } from './types'
 import { axialToWorld } from './board'
@@ -53,22 +53,42 @@ async function loadTileMesh(scene: Scene, tileType: TileType): Promise<TileTempl
   // Find the mesh with actual geometry (may not be index 0)
   const mesh = (result.meshes.find(m => m instanceof Mesh && (m as Mesh).getTotalVertices() > 0) ?? result.meshes[0]) as Mesh
 
-  // Compute raw bounding box to determine scale and centering
+  // Rotate vertex positions directly: STL is flat in XY plane, Z = height.
+  // We need it flat in XZ plane (Babylon Y-up), so apply -90° X rotation:
+  //   x' = x,  y' = z,  z' = -y
+  const positions = mesh.getVerticesData(VertexBuffer.PositionKind)
+  const normals = mesh.getVerticesData(VertexBuffer.NormalKind)
+  if (positions) {
+    for (let i = 0; i < positions.length; i += 3) {
+      const x = positions[i], y = positions[i + 1], z = positions[i + 2]
+      positions[i]     = x
+      positions[i + 1] = z
+      positions[i + 2] = -y
+    }
+    mesh.updateVerticesData(VertexBuffer.PositionKind, positions)
+  }
+  if (normals) {
+    for (let i = 0; i < normals.length; i += 3) {
+      const x = normals[i], y = normals[i + 1], z = normals[i + 2]
+      normals[i]     = x
+      normals[i + 1] = z
+      normals[i + 2] = -y
+    }
+    mesh.updateVerticesData(VertexBuffer.NormalKind, normals)
+  }
+
+  // Compute bounding box after rotation to determine scale and centering
   mesh.refreshBoundingInfo()
   const bb = mesh.getBoundingInfo().boundingBox
   const extents = bb.maximum.subtract(bb.minimum)
 
-  // Tiles from this Thingiverse set are exported Z-up (flat hex in XY plane).
-  // After a -90° X rotation the hex face points +Y (flat on floor).
-  // We store the rotation and scale as metadata and apply at clone time.
-  // Use the largest of X/Y (the pre-rotation horizontal dims) to scale.
-  const maxHoriz = Math.max(extents.x, extents.y)
+  // Scale to fit hex cell
+  const maxHoriz = Math.max(extents.x, extents.z)
   const scale = maxHoriz > 0 ? TARGET_TILE_DIAMETER / maxHoriz : 1
 
-  // Y offset: after -90° X rotation, old Z becomes new Y.
-  // Center of old Z range → needs to sit at y=0 post-rotation.
-  const zCenter = (bb.minimum.z + bb.maximum.z) / 2
-  const yOffset = -zCenter * scale
+  // Center the mesh vertically (terrain features pointing up, base at y=0)
+  const yCenter = (bb.minimum.y + bb.maximum.y) / 2
+  const yOffset = -yCenter * scale
 
   mesh.setEnabled(false)
   mesh.name = `template_${tileType}`
@@ -111,9 +131,9 @@ export async function renderTiles(scene: Scene, tiles: HexTile[]): Promise<void>
 
     instance.setEnabled(true)
 
-    // STL loader may set rotationQuaternion; null it out so .rotation is used
+    // Vertex positions already rotated — no mesh rotation needed
     instance.rotationQuaternion = null
-    instance.rotation = new Vector3(-Math.PI / 2, 0, 0)
+    instance.rotation = Vector3.Zero()
     instance.scaling.setAll(tmpl.scale)
 
     const { x, z } = axialToWorld(tile.q, tile.r)
