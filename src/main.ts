@@ -2,6 +2,8 @@ import { createScene } from './scene'
 import { createStandardBoard } from './board'
 import { renderTiles } from './tileRenderer'
 import { renderNumberTokens } from './numberToken'
+import { buildBoardGraph } from './boardGraph'
+import { createBoardOverlay } from './boardOverlay'
 
 async function main(): Promise<void> {
   const canvas = document.getElementById('renderCanvas') as HTMLCanvasElement
@@ -16,6 +18,12 @@ async function main(): Promise<void> {
 
   // Render number tokens on land tiles
   await renderNumberTokens(scene, board)
+
+  // Build vertex/edge graph and render overlay
+  const graph = buildBoardGraph(board)
+  console.log(`Vertices: ${graph.vertices.size}`)
+  console.log(`Edges: ${graph.edges.size}`)
+  const overlay = createBoardOverlay(scene, graph)
 
   // Start render loop
   engine.runRenderLoop(() => scene.render())
