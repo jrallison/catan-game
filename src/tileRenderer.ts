@@ -219,6 +219,12 @@ async function loadTemplateMesh(scene: Scene, tileType: TileType): Promise<Mesh>
   if (finalIndices) {
     const recomputedNormals = new Float32Array(positions.length)
     VertexData.ComputeNormals(positions, finalIndices, recomputedNormals)
+    // Negate all computed normals. The Z-negation + winding-swap pipeline produces
+    // inward-facing normals from ComputeNormals. Negating restores correct outward-
+    // facing normals for proper lighting (tops bright, undersides dark).
+    for (let i = 0; i < recomputedNormals.length; i++) {
+      recomputedNormals[i] = -recomputedNormals[i]
+    }
     vertexData.normals = recomputedNormals
     vertexData.indices = finalIndices
   }
@@ -255,7 +261,7 @@ function getOrCreateMaterial(scene: Scene, tileType: TileType): StandardMaterial
   mat.diffuseColor = Color3.White()                // vertex colors drive the diffuse response
   mat.emissiveColor = new Color3(0.35, 0.35, 0.35) // lifts color floor — shadows don't crush vibrancy
   mat.specularColor = Color3.Black()               // no specular highlights (stylized look)
-  mat.backFaceCulling = true
+  mat.backFaceCulling = false                      // required: Z-negation pipeline leaves screen-space winding inverted
 
   if (isWaterType(tileType)) {
     mat.alpha = WATER_ALPHA

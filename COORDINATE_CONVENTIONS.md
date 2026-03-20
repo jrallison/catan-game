@@ -36,7 +36,8 @@ This orientation affects texture UV mapping on horizontal discs — see Token se
 2. Negate Z normals: `normals[i+2] = -normals[i+2]`
 3. Swap winding order: swap `indices[i+1]` ↔ `indices[i+2]` per triangle
 4. Recompute normals via `VertexData.ComputeNormals()`
-5. `mat.backFaceCulling = true` — correct outward normals are produced by the above pipeline; do NOT set to false (causes inverted lighting on back faces)
+5. Negate all recomputed normals — the Z-negation + winding swap produces inward-facing normals from `ComputeNormals`; negation restores correct outward-facing normals for proper lighting
+6. `mat.backFaceCulling = false` — required; our Z-negation pipeline leaves screen-space winding inverted, so `true` would GPU-cull visible surfaces
 
 **Do NOT apply this fix in Blender — it lives in the loader.**
 
