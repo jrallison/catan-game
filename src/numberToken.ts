@@ -1,6 +1,7 @@
 import { Scene, MeshBuilder, StandardMaterial, DynamicTexture, Color3 } from '@babylonjs/core'
 import { HexTile } from './types'
 import { axialToWorld } from './board'
+import { DEPRESSION_OFFSET, DEPRESSION_RADIUS } from './tileGeometry'
 
 // Probability dots for each number
 const PROBABILITY_DOTS: Record<number, number> = {
@@ -8,21 +9,27 @@ const PROBABILITY_DOTS: Record<number, number> = {
   8: 5, 9: 4, 10: 3, 11: 2, 12: 1,
 }
 
+/** Small Y offset so the token sits just above the depression surface. */
+const TOKEN_Y_LIFT = 0.01
+
+/** Token diameter as a fraction of the depression diameter (slight inset). */
+const TOKEN_DIAMETER = DEPRESSION_RADIUS * 2 * 0.9
+
 export function renderNumberTokens(scene: Scene, tiles: HexTile[]): void {
   for (const tile of tiles) {
     if (tile.number === undefined) continue
 
     const { x, z } = axialToWorld(tile.q, tile.r)
 
-    // Create disc
+    // Create disc positioned in the tile's depression
     const disc = MeshBuilder.CreateCylinder(`token_${tile.q}_${tile.r}`, {
-      diameter: 1.0,
+      diameter: TOKEN_DIAMETER,
       height: 0.05,
       tessellation: 32,
     }, scene)
-    disc.position.x = x
-    disc.position.y = 0.35  // on top of tile
-    disc.position.z = z
+    disc.position.x = x + DEPRESSION_OFFSET.x
+    disc.position.y = DEPRESSION_OFFSET.y + TOKEN_Y_LIFT
+    disc.position.z = z + DEPRESSION_OFFSET.z
 
     // Create dynamic texture for number and dots
     const textureSize = 256
