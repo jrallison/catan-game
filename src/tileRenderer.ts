@@ -3,7 +3,6 @@ import '@babylonjs/loaders/STL'
 import { HexTile, TileType } from './types'
 import { axialToWorld } from './board'
 
-// Albedo colors per tile type
 const TILE_COLORS: Record<TileType, string> = {
   wood: '#2d5a1b',
   wool: '#7ecf3f',
@@ -26,6 +25,10 @@ const TILE_STL_MAP: Record<TileType, string> = {
   harbor_water: 'harbor_water.stl',
 }
 
+// Tile diameter in world units — must match axialToWorld hex circumradius * 2
+// axialToWorld size=2.1 → circumradius=2.1 → diameter=4.2
+const TARGET_TILE_DIAMETER = 4.2
+
 function hexColorToColor3(hex: string): Color3 {
   const r = parseInt(hex.slice(1, 3), 16) / 255
   const g = parseInt(hex.slice(3, 5), 16) / 255
@@ -33,78 +36,61 @@ function hexColorToColor3(hex: string): Color3 {
   return new Color3(r, g, b)
 }
 
-interface TileTemplate {
-  mesh: Mesh
-  yOffset: number
-  scale: number
-}
+const meshCache: Map<TileType, Mesh> = new Map()
 
-const meshCache: Map<TileType, TileTemplate> = new Map()
-
-const TARGET_TILE_DIAMETER = 4.0
-
-async function loadTileMesh(scene: Scene, tileType: TileType): Promise<TileTemplate> {
+async function loadTileMesh(scene: Scene, tileType: TileType): Promise<Mesh> {
   const cached = meshCache.get(tileType)
   if (cached) return cached
 
-  const stlFile = TILE_STL_MAP[tileType]
-  const result = await SceneLoader.ImportMeshAsync('', '/assets/', stlFile, scene)
+  const result = await SceneLoader.ImportMeshAsync('', '/assets/', TILE_STL_MAP[tileType], scene)
+  const mesh = (result.meshes.find(
+    m => m instanceof Mesh && (m as Mesh).getTotalVertices() > 0
+  ) ?? result.meshes[0]) as Mesh
 
-  // Find the mesh with actual geometry (may not be index 0)
-  const mesh = (result.meshes.find(m => m instanceof Mesh && (m as Mesh).getTotalVertices() > 0) ?? result.meshes[0]) as Mesh
-
-  // Rotate vertex positions directly: STL is flat in XY plane, Z = height.
-  // We need it flat in XZ plane (Babylon Y-up), so apply -90° X rotation:
-  //   x' = x,  y' = z,  z' = -y
-  const positions = mesh.getVerticesData(VertexBuffer.PositionKind)
-  const normals = mesh.getVerticesData(VertexBuffer.NormalKind)
-  if (positions) {
-    for (let i = 0; i < positions.length; i += 3) {
-      const x = positions[i], y = positions[i + 1], z = positions[i + 2]
-      positions[i]     = x
-      positions[i + 1] = z
-      positions[i + 2] = -y
-    }
-    mesh.updateVerticesData(VertexBuffer.PositionKind, positions)
+  // --- Pass 1: rotate -90° around X  (x'=x, y'=z, z'=-y) ---
+  // STL is flat in native XY plane (Z = terrain height). This puts it flat in Babylon XZ plane.
+  let pos = mesh.getVerticesData(VertexBuffer.PositionKind)!
+  let nor = mesh.getVerticesData(VertexBuffer.NormalKind)
+  for (let i = 0; i < pos.length; i += 3) {
+    const x = pos[i], y = pos[i + 1], z = pos[i + 2]
+    pos[i] = x; pos[i + 1] = z; pos[i + 2] = -y
   }
-  if (normals) {
-    for (let i = 0; i < normals.length; i += 3) {
-      const x = normals[i], y = normals[i + 1], z = normals[i + 2]
-      normals[i]     = x
-      normals[i + 1] = z
-      normals[i + 2] = -y
+  if (nor) {
+    for (let i = 0; i < nor.length; i += 3) {
+      const x = nor[i], y = nor[i + 1], z = nor[i + 2]
+      nor[i] = x; nor[i + 1] = z; nor[i + 2] = -y
     }
-    mesh.updateVerticesData(VertexBuffer.NormalKind, normals)
   }
+  mesh.updateVerticesData(VertexBuffer.PositionKind, pos)
+  if (nor) mesh.updateVerticesData(VertexBuffer.NormalKind, nor)
 
-  // Compute bounding box after rotation to determine scale and centering
+  // --- Pass 2: compute bounds after rotation ---
   mesh.refreshBoundingInfo()
-  const bb = mesh.getBoundingInfo().boundingBox
-  const extents = bb.maximum.subtract(bb.minimum)
+  const bb  = mesh.getBoundingInfo().boundingBox
+  const ext = bb.maximum.subtract(bb.minimum)
 
-  // Scale to fit hex cell
-  const maxHoriz = Math.max(extents.x, extents.z)
-  const scale = maxHoriz > 0 ? TARGET_TILE_DIAMETER / maxHoriz : 1
+  // Scale: match tile diameter to grid spacing
+  const maxHoriz = Math.max(ext.x, ext.z)
+  const s = maxHoriz > 0 ? TARGET_TILE_DIAMETER / maxHoriz : 1
 
-  // Center the mesh vertically (terrain features pointing up, base at y=0)
-  const yCenter = (bb.minimum.y + bb.maximum.y) / 2
-  const yOffset = -yCenter * scale
+  // Centering offsets: X/Z to origin, Y base to 0
+  const cx = (bb.minimum.x + bb.maximum.x) / 2
+  const cy =  bb.minimum.y                      // base at y=0
+  const cz = (bb.minimum.z + bb.maximum.z) / 2
+
+  // --- Pass 2: apply scale + center in one shot ---
+  pos = mesh.getVerticesData(VertexBuffer.PositionKind)!
+  for (let i = 0; i < pos.length; i += 3) {
+    pos[i]     = (pos[i]     - cx) * s
+    pos[i + 1] = (pos[i + 1] - cy) * s
+    pos[i + 2] = (pos[i + 2] - cz) * s
+  }
+  mesh.updateVerticesData(VertexBuffer.PositionKind, pos)
 
   mesh.setEnabled(false)
   mesh.name = `template_${tileType}`
-
-  const template: TileTemplate = { mesh, yOffset, scale }
-  meshCache.set(tileType, template)
-  return template
-}
-
-function createTileMaterial(scene: Scene, tileType: TileType): PBRMaterial {
-  const mat = new PBRMaterial(`mat_${tileType}`, scene)
-  mat.albedoColor = hexColorToColor3(TILE_COLORS[tileType])
-  mat.metallic = 0.1
-  mat.roughness = 0.8
-  if (tileType === 'water' || tileType === 'harbor_water') mat.alpha = 0.85
-  return mat
+  meshCache.set(tileType, mesh)
+  return mesh
 }
 
 const materialCache: Map<TileType, PBRMaterial> = new Map()
@@ -112,7 +98,11 @@ const materialCache: Map<TileType, PBRMaterial> = new Map()
 function getOrCreateMaterial(scene: Scene, tileType: TileType): PBRMaterial {
   let mat = materialCache.get(tileType)
   if (!mat) {
-    mat = createTileMaterial(scene, tileType)
+    mat = new PBRMaterial(`mat_${tileType}`, scene)
+    mat.albedoColor = hexColorToColor3(TILE_COLORS[tileType])
+    mat.metallic = 0.1
+    mat.roughness = 0.8
+    if (tileType === 'water' || tileType === 'harbor_water') mat.alpha = 0.85
     materialCache.set(tileType, mat)
   }
   return mat
@@ -126,21 +116,16 @@ export async function renderTiles(scene: Scene, tiles: HexTile[]): Promise<void>
     const tmpl = meshCache.get(tile.type)
     if (!tmpl) continue
 
-    const instance = tmpl.mesh.clone(`tile_${tile.q}_${tile.r}`)
-    if (!instance) continue
+    const inst = tmpl.clone(`tile_${tile.q}_${tile.r}`)
+    if (!inst) continue
 
-    instance.setEnabled(true)
-
-    // Vertex positions already rotated — no mesh rotation needed
-    instance.rotationQuaternion = null
-    instance.rotation = Vector3.Zero()
-    instance.scaling.setAll(tmpl.scale)
+    inst.setEnabled(true)
+    inst.rotationQuaternion = null
+    inst.rotation = Vector3.Zero()
+    inst.scaling  = Vector3.One()
 
     const { x, z } = axialToWorld(tile.q, tile.r)
-    instance.position.x = x
-    instance.position.y = tmpl.yOffset
-    instance.position.z = z
-
-    instance.material = getOrCreateMaterial(scene, tile.type)
+    inst.position.set(x, 0, z)
+    inst.material = getOrCreateMaterial(scene, tile.type)
   }
 }
