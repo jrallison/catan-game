@@ -255,7 +255,7 @@ function getOrCreateMaterial(scene: Scene, tileType: TileType): StandardMaterial
   mat.diffuseColor = Color3.White()                // vertex colors drive the diffuse response
   mat.emissiveColor = new Color3(0.35, 0.35, 0.35) // lifts color floor — shadows don't crush vibrancy
   mat.specularColor = Color3.Black()               // no specular highlights (stylized look)
-  mat.backFaceCulling = false
+  mat.backFaceCulling = true
 
   if (isWaterType(tileType)) {
     mat.alpha = WATER_ALPHA
