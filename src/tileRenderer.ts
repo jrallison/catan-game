@@ -174,15 +174,20 @@ async function loadTemplateMesh(scene: Scene, tileType: TileType): Promise<Mesh>
   const positions = new Float32Array(rawPositions)
   const normals   = rawNormals ? new Float32Array(rawNormals) : null
 
-  // Step 3a: Fix Blender GLB Z-axis negation.
+  // Fix Blender→GLTF→Babylon coordinate pipeline:
+  // Blender (Z-up right-handed) → GLTF (Y-up right-handed, CCW front faces)
+  // Babylon loads GLTF by applying a Z-flip node transform: outward GLTF CCW faces → CW in Babylon.
+  // Babylon uses left-handed coordinates where CW = front face.
   //
-  // Blender exports GLTF with Y-up by converting its native Z-up space as:
-  //   Blender-X → GLTF-X, Blender-Y → GLTF -Z, Blender-Z → GLTF-Y
-  // Babylon's STL loader did: STL-X → X, STL-Y → +Z, STL-Z → Y
-  // So the GLB Z = -(STL loader Z). Two consequences we must undo:
-  //   1. Geometry is mirrored along Z → depression shifts to wrong position
-  //   2. Mirroring flips triangle winding order → normals invert → backface culling
-  //      makes front faces invisible (the "see-through" bug)
+  // When baking vertex data (reading local positions before the node transform),
+  // we manually negate Z to replicate what the node transform would do.
+  // After Z-negation: outward faces are CW = front-facing in Babylon. ✓
+  //
+  // ComputeNormals uses right-hand cross product convention → CW triangles produce
+  // inward normals. We negate after computing to restore outward-facing normals.
+  //
+  // DO NOT swap winding order (i+1 ↔ i+2) — this would flip CW→CCW, making
+  // outward faces into back-faces that get culled by backFaceCulling=true.
   for (let i = 0; i < positions.length; i += 3) {
     positions[i + 2] = -positions[i + 2]
   }
@@ -191,15 +196,8 @@ async function loadTemplateMesh(scene: Scene, tileType: TileType): Promise<Mesh>
       normals[i + 2] = -normals[i + 2]
     }
   }
-  // Restore winding order: negate-Z mirrors → swap vertex 1 and 2 in each triangle
+  // Copy indices as-is — no winding swap needed (see comment above)
   const fixedIndices = indices ? new Int32Array(indices) : null
-  if (fixedIndices) {
-    for (let i = 0; i < fixedIndices.length; i += 3) {
-      const tmp = fixedIndices[i + 1]
-      fixedIndices[i + 1] = fixedIndices[i + 2]
-      fixedIndices[i + 2] = tmp
-    }
-  }
 
   // Step 4: Compute bounds, then scale + center
   const bounds = computeBounds(positions)
@@ -214,14 +212,14 @@ async function loadTemplateMesh(scene: Scene, tileType: TileType): Promise<Mesh>
   const vertexData = new VertexData()
   vertexData.positions = positions
   // Recompute normals from the corrected geometry — the GLB normals are
-  // unreliable after Z-negation + winding-order reversal.
+  // unreliable after Z-negation (they were for the pre-negation coordinate space).
   const finalIndices = fixedIndices ?? (indices ? new Int32Array(indices) : null)
   if (finalIndices) {
     const recomputedNormals = new Float32Array(positions.length)
     VertexData.ComputeNormals(positions, finalIndices, recomputedNormals)
-    // Negate all computed normals. The Z-negation + winding-swap pipeline produces
-    // inward-facing normals from ComputeNormals. Negating restores correct outward-
-    // facing normals for proper lighting (tops bright, undersides dark).
+    // Negate all computed normals. ComputeNormals uses right-hand cross product,
+    // which gives inward normals for CW-wound triangles. Negating restores
+    // correct outward-facing normals for proper lighting (tops bright, undersides dark).
     for (let i = 0; i < recomputedNormals.length; i++) {
       recomputedNormals[i] = -recomputedNormals[i]
     }
@@ -261,7 +259,7 @@ function getOrCreateMaterial(scene: Scene, tileType: TileType): StandardMaterial
   mat.diffuseColor = Color3.White()                // vertex colors drive the diffuse response
   mat.emissiveColor = new Color3(0.35, 0.35, 0.35) // lifts color floor — shadows don't crush vibrancy
   mat.specularColor = Color3.Black()               // no specular highlights (stylized look)
-  mat.backFaceCulling = false                      // required: Z-negation pipeline leaves screen-space winding inverted
+  mat.backFaceCulling = true                       // correct: Z-negation gives CW winding = front-face in Babylon's left-handed system
 
   if (isWaterType(tileType)) {
     mat.alpha = WATER_ALPHA

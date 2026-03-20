@@ -29,15 +29,19 @@ This orientation affects texture UV mapping on horizontal discs — see Token se
 
 ## Blender → GLTF → Babylon Pipeline
 
-**Critical:** Blender exports GLTF with `Blender_Y → GLTF_-Z` axis mapping. This negates Z on all geometry.
+**Critical:** Babylon.js uses a **left-handed coordinate system where CW (clockwise) = front face**.
+
+Blender exports GLTF as right-handed (CCW front faces). Babylon's GLTF loader applies a Z-flip node transform to convert. When we **bake vertex data** (read local positions, bypass the node transform), we manually negate Z to replicate the transform.
+
+**After Z-negation:** outward GLTF CCW faces become CW in Babylon = front-facing ✓
 
 **Fix applied in `tileRenderer.ts` for every GLB load:**
 1. Negate Z positions: `positions[i+2] = -positions[i+2]`
 2. Negate Z normals: `normals[i+2] = -normals[i+2]`
-3. Swap winding order: swap `indices[i+1]` ↔ `indices[i+2]` per triangle
+3. **DO NOT swap winding order** — Z-negation already produces CW = front-face in Babylon. Swapping would flip CW→CCW, making outward faces into back-faces that get culled.
 4. Recompute normals via `VertexData.ComputeNormals()`
-5. Negate all recomputed normals — the Z-negation + winding swap produces inward-facing normals from `ComputeNormals`; negation restores correct outward-facing normals for proper lighting
-6. `mat.backFaceCulling = false` — required; our Z-negation pipeline leaves screen-space winding inverted, so `true` would GPU-cull visible surfaces
+5. Negate all recomputed normals — `ComputeNormals` uses right-hand cross product, so CW triangles produce inward normals; negation restores correct outward-facing normals for proper lighting
+6. `mat.backFaceCulling = true` — correct; outward faces are CW = front-face in Babylon's left-handed system
 
 **Do NOT apply this fix in Blender — it lives in the loader.**
 
@@ -90,7 +94,7 @@ mat.diffuseColor  = Color3.White()          // vertex colors drive diffuse
 mat.emissiveColor = new Color3(0.35, 0.35, 0.35)  // floor lift — prevents dark crush
 mat.specularColor = Color3.Black()          // no specular highlights
 mat.disableLighting = false                 // lighting ON for 3D depth
-mat.backFaceCulling = true                  // correct outward normals produced by Z-negation + winding swap + ComputeNormals pipeline. Do NOT set to false; it causes back faces to receive incorrect lighting.
+mat.backFaceCulling = true                  // correct: Z-negation gives CW winding = front-face in Babylon's left-handed system
 ```
 
 **Why not PBR:** PBR energy conservation darkens stylized colors by design. This is a board game, not a photorealistic scene.
