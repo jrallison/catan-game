@@ -29,6 +29,7 @@ import {
   Mesh,
   VertexBuffer,
   VertexData,
+  Vector3,
 } from '@babylonjs/core'
 import '@babylonjs/loaders'
 import { HexTile, TileType } from './types'
@@ -252,10 +253,16 @@ async function loadTemplateMesh(scene: Scene, tileType: TileType): Promise<Mesh>
   const templateMesh = new Mesh(`template_${tileType}`, scene)
   const vertexData = new VertexData()
   vertexData.positions = positions
-  if (normals) vertexData.normals = normals
+  // Recompute normals from the corrected geometry — the GLB normals are
+  // unreliable after Z-negation + winding-order reversal.
+  const finalIndices = fixedIndices ?? (indices ? new Int32Array(indices) : null)
+  if (finalIndices) {
+    const recomputedNormals = new Float32Array(positions.length)
+    VertexData.ComputeNormals(positions, finalIndices, recomputedNormals)
+    vertexData.normals = recomputedNormals
+    vertexData.indices = finalIndices
+  }
   if (rawColors) vertexData.colors = new Float32Array(rawColors)
-  if (fixedIndices) vertexData.indices = fixedIndices
-  else if (indices) vertexData.indices = indices
   vertexData.applyToMesh(templateMesh, /* updatable */ true)
 
   // Reset transform so the mesh is purely defined by its baked vertex data
@@ -291,6 +298,7 @@ function getOrCreateMaterial(scene: Scene, tileType: TileType): PBRMaterial {
   if (isWaterType(tileType)) {
     mat.alpha = WATER_ALPHA
   }
+  mat.backFaceCulling = false  // safety net: recomputed normals should be correct, but keep both sides visible
 
   materialCache.set(tileType, mat)
   return mat
