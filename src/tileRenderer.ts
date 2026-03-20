@@ -45,9 +45,9 @@ import { axialToWorld } from './board'
  */
 const TARGET_TILE_DIAMETER = 4.2
 // Hex grid spacing: size=3.0, center-to-center = 3.0 × √3 ≈ 5.196.
-// Tiles at 4.2 diameter leave a ~1.0 unit gap. Bases scale to center-to-center
-// distance so they fill the gap exactly — inner edge at tile boundary, outer edges touching.
-const TARGET_BASE_DIAMETER = 5.2
+// Bases scale to point-to-point diameter (size × 2 = 6.0) so each base reaches
+// exactly to the hex corner vertices where three tiles meet — no triangular gaps.
+const TARGET_BASE_DIAMETER = 6.0
 
 /** GLB filename per tile type (served from /assets/). */
 const TILE_GLB_MAP: Record<TileType, string> = {
