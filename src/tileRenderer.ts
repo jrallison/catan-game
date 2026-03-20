@@ -133,13 +133,18 @@ export async function renderTiles(scene: Scene, tiles: HexTile[]): Promise<void>
     const yRot = (tile.type === 'water' || tile.type === 'harbor_water') ? Math.PI / 6 : 0
     inst.rotation.copyFromFloats(0, yRot, 0)
 
-    // Apply scale + centering via mesh transform (vertex data is non-updatable)
+    // Apply scale + centering via mesh transform (vertex data is non-updatable).
+    // Centering offset must be rotated by the same Y angle so the tile centers
+    // on its world position rather than orbiting around the mesh origin.
     inst.scaling.setAll(tmpl.scale)
     const { x, z } = axialToWorld(tile.q, tile.r)
+    const cosY = Math.cos(yRot), sinY = Math.sin(yRot)
+    const rcx = tmpl.cx * cosY - tmpl.cz * sinY
+    const rcz = tmpl.cx * sinY + tmpl.cz * cosY
     inst.position.set(
-      x  - tmpl.cx * tmpl.scale,
-      0  - tmpl.cy * tmpl.scale,   // base at y=0
-      z  - tmpl.cz * tmpl.scale
+      x - rcx * tmpl.scale,
+      0 - tmpl.cy * tmpl.scale,
+      z - rcz * tmpl.scale
     )
 
     inst.material = getOrCreateMaterial(scene, tile.type)
