@@ -54,3 +54,12 @@ Add a `Partial<Record<TileType, number>>` scale map and use it in `loadTemplateM
 
 ### Texture support
 Replace `hexColorToColor3` usage in `getOrCreateMaterial` with texture loading. The material cache already supports per-type materials.
+
+## Number Token Text Orientation
+
+The token face disc uses rotation.x = -Math.PI/2 to lay flat.
+Texture UV: U = world X, V = world +Z.
+Camera at alpha=0, beta=0.3 (default) sees world +Z as screen-right.
+Canvas text needs ctx.rotate(-PI/2) pre-rotation to appear upright.
+TOKEN_CANVAS_ROTATION constant in numberToken.ts — change this if camera
+default alpha changes.

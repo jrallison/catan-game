@@ -10,6 +10,13 @@ import { HexTile } from './types'
 import { axialToWorld } from './board'
 import { DEPRESSION_OFFSET, DEPRESSION_RADIUS } from './tileGeometry'
 
+// TOKEN_CANVAS_ROTATION: compensates for disc UV orientation vs camera.
+// CreateDisc rotation.x=-PI/2 maps texture V to world +Z.
+// Camera at alpha=0, beta=0.3 sees world +Z as screen-right,
+// so canvas text needs -PI/2 pre-rotation to read upright.
+// If camera alpha changes significantly, revisit this value.
+const TOKEN_CANVAS_ROTATION = -Math.PI / 2
+
 // Probability dots for each number
 const PROBABILITY_DOTS: Record<number, number> = {
   2: 1, 3: 2, 4: 3, 5: 4, 6: 5,
@@ -82,12 +89,18 @@ export async function renderNumberTokens(scene: Scene, tiles: HexTile[]): Promis
     texture.hasAlpha = true
     const ctx = texture.getContext() as unknown as CanvasRenderingContext2D
 
-    // White circular background
+    // White circular background (drawn before rotation so it stays centered)
     ctx.clearRect(0, 0, textureSize, textureSize)
     ctx.beginPath()
     ctx.arc(textureSize / 2, textureSize / 2, textureSize / 2 - 4, 0, Math.PI * 2)
     ctx.fillStyle = '#FFFFFF'
     ctx.fill()
+
+    // Pre-rotate canvas so text reads upright from default camera view
+    ctx.save()
+    ctx.translate(textureSize / 2, textureSize / 2)
+    ctx.rotate(TOKEN_CANVAS_ROTATION)
+    ctx.translate(-textureSize / 2, -textureSize / 2)
 
     // Number text
     const isHighProb = tile.number === 6 || tile.number === 8
@@ -112,6 +125,8 @@ export async function renderNumberTokens(scene: Scene, tiles: HexTile[]): Promis
       ctx.arc(dotsStartX + i * dotSpacing, dotsY, dotRadius, 0, Math.PI * 2)
       ctx.fill()
     }
+
+    ctx.restore()
 
     texture.update()
 
