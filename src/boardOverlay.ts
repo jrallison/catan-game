@@ -23,11 +23,11 @@ import { BoardGraph } from './boardGraph'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const VERTEX_Y = 0.20          // base_Y(-0.21) + outer_edge_top(0.342) + clearance
+const VERTEX_Y = 0.22          // base_Y(-0.15) + road surface(~0.192) + small clearance
 
 const EDGE_RADIUS = 0.08
 const EDGE_HEIGHT = 1.9        // vertex-to-vertex (2.6) minus 2 × disc radius (0.35) = 1.9
-const EDGE_Y = 0.20            // same level as vertex discs
+const EDGE_Y = 0.22            // same level as vertex discs
 
 // Emissive colors — no alpha manipulation, keeps alpha=1.0 for picking
 const EMISSIVE_DEFAULT  = new Color3(0.7, 0.7, 0.7)   // soft white glow
