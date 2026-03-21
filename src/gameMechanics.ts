@@ -1,5 +1,7 @@
-import { GameState } from './gameState'
+import { GameState, ResourceHand } from './gameState'
 import { BoardGraph } from './boardGraph'
+import { TileType, ResourceType } from './types'
+import { createStandardBoard } from './board'
 
 /** Returns vertex ids where a settlement CAN be placed by current player */
 export function getValidSettlementPlacements(state: GameState, graph: BoardGraph): string[] {
@@ -72,6 +74,8 @@ function advanceInitialPlacement(state: GameState): GameState {
       initialPlacementStep: 'place-settlement',
       initialPlacementOrderPos: nextPos,
       lastPlacedSettlement: null,
+      turnPhase: 'roll',
+      lastRoll: null,
     }
   }
   return {
@@ -81,4 +85,57 @@ function advanceInitialPlacement(state: GameState): GameState {
     initialPlacementOrderPos: nextPos,
     lastPlacedSettlement: null,
   }
+}
+
+// ─── Resource Distribution ────────────────────────────────────────────────────
+
+/** TileType → ResourceType mapping */
+const TILE_RESOURCE: Partial<Record<TileType, ResourceType>> = {
+  wood:  'wood',
+  brick: 'brick',
+  ore:   'ore',
+  wheat: 'wheat',
+  wool:  'wool',
+}
+
+/**
+ * Given a dice roll, distribute resources to all players.
+ * Each settlement adjacent to a tile with that number token gets 1 of that resource.
+ * Each city gets 2. Desert and 7s produce nothing.
+ */
+export function distributeResources(
+  roll: number,
+  state: GameState,
+  graph: BoardGraph,
+  numberTokens: Map<string, number>
+): GameState {
+  if (roll === 7) return state  // robber — skip for now
+
+  const board = createStandardBoard()
+  const updatedPlayers = state.players.map(p => ({ ...p, hand: { ...p.hand } }))
+
+  for (const [tileKey, tokenValue] of numberTokens) {
+    if (tokenValue !== roll) continue
+
+    const [q, r] = tileKey.split(',').map(Number)
+    const tile = board.find(t => t.q === q && t.r === r)
+    if (!tile) continue
+    const resource = TILE_RESOURCE[tile.type]
+    if (!resource) continue
+
+    for (const [vertexId, vertex] of graph.vertices) {
+      if (!vertex.adjacentTiles.includes(tileKey)) continue
+
+      for (let i = 0; i < updatedPlayers.length; i++) {
+        const p = updatedPlayers[i]
+        if (p.settlements.includes(vertexId)) {
+          updatedPlayers[i] = { ...p, hand: { ...p.hand, [resource]: p.hand[resource] + 1 } }
+        } else if (p.cities.includes(vertexId)) {
+          updatedPlayers[i] = { ...p, hand: { ...p.hand, [resource]: p.hand[resource] + 2 } }
+        }
+      }
+    }
+  }
+
+  return { ...state, players: updatedPlayers }
 }

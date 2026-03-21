@@ -6,7 +6,7 @@ import { renderNumberTokens } from './numberToken'
 import { buildBoardGraph } from './boardGraph'
 import { createBoardOverlay } from './boardOverlay'
 import { createInitialGameState, GameState } from './gameState'
-import { getValidSettlementPlacements, getValidRoadPlacements, placeSettlement, placeRoad } from './gameMechanics'
+import { getValidSettlementPlacements, getValidRoadPlacements, placeSettlement, placeRoad, distributeResources } from './gameMechanics'
 import { createHud } from './hud'
 
 async function main(): Promise<void> {
@@ -30,9 +30,45 @@ async function main(): Promise<void> {
   console.log(`Vertices: ${graph.vertices.size}`)
   console.log(`Edges: ${graph.edges.size}`)
 
+  // Build number token map for resource distribution
+  const numberTokens = new Map<string, number>()
+  for (const tile of board) {
+    if (tile.number) {
+      numberTokens.set(`${tile.q},${tile.r}`, tile.number)
+    }
+  }
+
   // ─── Game state ────────────────────────────────────────────────────
   let state: GameState = createInitialGameState()
-  const hud = createHud()
+
+  function handleRoll(): void {
+    if (state.phase !== 'main-game' || state.turnPhase !== 'roll') return
+    const d1 = Math.ceil(Math.random() * 6)
+    const d2 = Math.ceil(Math.random() * 6)
+    const roll = d1 + d2
+    state = {
+      ...state,
+      lastRoll: [d1, d2],
+      turnPhase: 'build',
+    }
+    state = distributeResources(roll, state, graph, numberTokens)
+    hud.showDiceResult([d1, d2])
+    applyGameState()
+  }
+
+  function handleEndTurn(): void {
+    if (state.phase !== 'main-game' || state.turnPhase !== 'build') return
+    const nextPlayer = (state.currentPlayerIndex + 1) % state.players.length
+    state = {
+      ...state,
+      currentPlayerIndex: nextPlayer,
+      turnPhase: 'roll',
+      lastRoll: null,
+    }
+    applyGameState()
+  }
+
+  const hud = createHud({ onRoll: handleRoll, onEndTurn: handleEndTurn })
 
   function applyGameState(): void {
     const player = state.players[state.currentPlayerIndex]
@@ -49,7 +85,6 @@ async function main(): Promise<void> {
             overlay.setVertexState(id, valid.has(id) ? 'valid' : 'invalid')
           }
         }
-        // Dim all edges during settlement phase
         for (const [id] of graph.edges) {
           const isOccupied = state.players.some(p => p.roads.includes(id))
           if (isOccupied) {
@@ -59,11 +94,9 @@ async function main(): Promise<void> {
             overlay.setEdgeState(id, 'invalid')
           }
         }
-        hud.update(`Player ${player.id + 1}`, player.colorHex, 'Place a settlement')
       } else {
         // place-road phase
         const valid = new Set(getValidRoadPlacements(state, graph))
-        // Keep vertex states showing settled vertices
         for (const [id] of graph.vertices) {
           const isOccupied = state.players.some(p => p.settlements.includes(id) || p.cities.includes(id))
           if (isOccupied) {
@@ -82,7 +115,6 @@ async function main(): Promise<void> {
             overlay.setEdgeState(id, valid.has(id) ? 'valid' : 'invalid')
           }
         }
-        hud.update(`Player ${player.id + 1}`, player.colorHex, 'Place a road')
       }
     }
 
@@ -106,8 +138,9 @@ async function main(): Promise<void> {
           overlay.setEdgeState(id, 'invalid')
         }
       }
-      hud.update('Setup complete', '#ffffff', 'Main game coming soon...')
     }
+
+    hud.update(state)
   }
 
   // Create overlay with click handlers
