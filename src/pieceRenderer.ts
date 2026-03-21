@@ -47,7 +47,7 @@ const PIECE_BASE_Y     = 0.10    // = RING_TOP_Y from hexRing.ts
 
 const PLAYER_COLORS: Record<PlayerColor, Color3> = {
   red:  new Color3(0.9, 0.15, 0.15),
-  blue: new Color3(0.2, 0.45, 0.85),
+  blue: new Color3(0.4, 0.65, 1.0),
 }
 
 // ─── PieceRenderer Class ─────────────────────────────────────────────────────
