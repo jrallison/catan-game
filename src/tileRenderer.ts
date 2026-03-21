@@ -44,12 +44,10 @@ import { axialToWorld } from './board'
  * A regular flat-top hex with that edge-to-edge width has corner-to-corner ≈ 4.2.
  */
 const TARGET_TILE_DIAMETER = 4.2
-// axialToWorld size=2.6 → center-to-center = 2.6 × √3 = 4.50.
-// Bases scale to 5.2 (= size × 2 = outer point-to-point diameter).
-// This uses the same scale factor as terrain tiles (91.22 blender units → 5.2 game units
-// matches terrain 74 blender units → 4.2 game units at scale 0.0568).
-// Corners of 3 adjacent bases meet exactly at circumradius 2.6 — no triangular gaps.
-const TARGET_BASE_DIAMETER = 5.2
+// axialToWorld size=2.45 → center-to-center = 2.45 × √3 = 4.24.
+// Bases scale to 4.9 (= size × 2). Border width = 2.45 - 2.1 = 0.35 per side (down from 0.50).
+// Minimum viable size before tile corners start overlapping (need center-to-center > 4.2).
+const TARGET_BASE_DIAMETER = 4.9
 
 /** GLB filename per tile type (served from /assets/). */
 const TILE_GLB_MAP: Record<TileType, string> = {
