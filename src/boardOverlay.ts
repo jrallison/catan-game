@@ -23,12 +23,11 @@ import { BoardGraph } from './boardGraph'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const VERTEX_RADIUS = 0.15     // slightly larger for visibility
-const VERTEX_Y = 0.55          // above landscape base top (~0.40) + clearance
+const VERTEX_Y = 0.36          // on border surface (border_Y + border_height ≈ 0.346)
 
 const EDGE_RADIUS = 0.08
-const EDGE_HEIGHT = 0.6        // longer for visibility
-const EDGE_Y = 0.50            // above landscape base top
+const EDGE_HEIGHT = 2.6        // full vertex-to-vertex distance
+const EDGE_Y = 0.36            // on border surface
 
 // Emissive colors — no alpha manipulation, keeps alpha=1.0 for picking
 const EMISSIVE_DEFAULT  = new Color3(0.7, 0.7, 0.7)   // soft white glow
@@ -54,31 +53,36 @@ export function createBoardOverlay(scene: Scene, graph: BoardGraph): {
   // ─── Create vertex markers ─────────────────────────────────────────
 
   for (const [id, vertex] of graph.vertices) {
-    const sphere = MeshBuilder.CreateSphere(`vtx_${id}`, { diameter: VERTEX_RADIUS * 2, segments: 8 }, scene)
-    sphere.position.set(vertex.x, VERTEX_Y, vertex.z)
+    // Flat disc for settlement spot — lies flat in XZ plane
+    const disc = MeshBuilder.CreateCylinder(`vtx_${id}`, {
+      diameter: 0.7,       // fills the settlement circle on the border
+      height: 0.04,        // flat disc, just thick enough to see
+      tessellation: 16,
+    }, scene)
+    disc.position.set(vertex.x, VERTEX_Y, vertex.z)
 
     const mat = new StandardMaterial(`vtxMat_${id}`, scene)
     mat.diffuseColor = Color3.Black()
     mat.emissiveColor = EMISSIVE_DEFAULT.clone()
     mat.specularColor = Color3.Black()
     mat.alpha = 1.0  // MUST be 1.0 for picking to work
-    sphere.material = mat
-    sphere.isPickable = true
+    disc.material = mat
+    disc.isPickable = true
 
     // Hover interaction
-    sphere.actionManager = new ActionManager(scene)
-    sphere.actionManager.registerAction(
+    disc.actionManager = new ActionManager(scene)
+    disc.actionManager.registerAction(
       new ExecuteCodeAction(ActionManager.OnPointerOverTrigger, () => {
         mat.emissiveColor = EMISSIVE_HOVER.clone()
       })
     )
-    sphere.actionManager.registerAction(
+    disc.actionManager.registerAction(
       new ExecuteCodeAction(ActionManager.OnPointerOutTrigger, () => {
         mat.emissiveColor = EMISSIVE_DEFAULT.clone()
       })
     )
 
-    vertexMeshes.set(id, sphere)
+    vertexMeshes.set(id, disc)
     vertexMaterials.set(id, mat)
   }
 
