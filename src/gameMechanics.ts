@@ -1,7 +1,14 @@
-import { GameState, ResourceHand } from './gameState'
+import { GameState, Player, ResourceHand } from './gameState'
 import { BoardGraph } from './boardGraph'
 import { TileType, ResourceType } from './types'
 import { createStandardBoard } from './board'
+
+// ─── Victory Points ───────────────────────────────────────────────────────────
+
+export function calculateVP(player: Player): number {
+  return player.settlements.length * 1
+       + player.cities.length * 2
+}
 
 // ─── Build Costs ──────────────────────────────────────────────────────────────
 

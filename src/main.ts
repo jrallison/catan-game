@@ -5,13 +5,13 @@ import { createHexRings } from './hexRing'
 import { renderNumberTokens } from './numberToken'
 import { buildBoardGraph } from './boardGraph'
 import { createBoardOverlay } from './boardOverlay'
-import { createInitialGameState, GameState } from './gameState'
+import { createInitialGameState, GameState, BuildMode } from './gameState'
 import {
   getValidSettlementPlacements, getValidRoadPlacements, placeSettlement, placeRoad,
   distributeResources, BUILD_COSTS, deductCost,
   getValidSettlementBuildLocations, getValidRoadBuildLocations, getValidCityUpgrades,
+  calculateVP,
 } from './gameMechanics'
-import { BuildMode } from './gameState'
 import { createHud } from './hud'
 
 async function main(): Promise<void> {
@@ -46,7 +46,17 @@ async function main(): Promise<void> {
   // ─── Game state ────────────────────────────────────────────────────
   let state: GameState = createInitialGameState()
 
+  function checkWin(): void {
+    for (const player of state.players) {
+      if (calculateVP(player) >= 10) {
+        state = { ...state, phase: 'game-over', winner: player.color }
+        return
+      }
+    }
+  }
+
   function handleRoll(): void {
+    if (state.phase === 'game-over') return
     if (state.phase !== 'main-game' || state.turnPhase !== 'roll') return
     const d1 = Math.ceil(Math.random() * 6)
     const d2 = Math.ceil(Math.random() * 6)
@@ -62,6 +72,7 @@ async function main(): Promise<void> {
   }
 
   function handleEndTurn(): void {
+    if (state.phase === 'game-over') return
     if (state.phase !== 'main-game' || state.turnPhase !== 'build') return
     const nextPlayer = (state.currentPlayerIndex + 1) % state.players.length
     state = {
@@ -75,6 +86,7 @@ async function main(): Promise<void> {
   }
 
   function handleBuildMode(mode: BuildMode): void {
+    if (state.phase === 'game-over') return
     if (state.phase !== 'main-game' || state.turnPhase !== 'build') return
     // Toggle: clicking same mode cancels it
     state = { ...state, buildMode: state.buildMode === mode ? 'none' : mode }
@@ -176,6 +188,7 @@ async function main(): Promise<void> {
   // Create overlay with click handlers
   const overlay = createBoardOverlay(scene, graph, {
     onVertexClick(id: string) {
+      if (state.phase === 'game-over') return
       // ─── Initial placement ─────────────────────────────────────
       if (state.phase === 'initial-placement') {
         if (state.initialPlacementStep !== 'place-settlement') return
@@ -196,6 +209,7 @@ async function main(): Promise<void> {
             : p),
           buildMode: 'none',
         }
+        checkWin()
         applyGameState()
         return
       }
@@ -215,11 +229,13 @@ async function main(): Promise<void> {
             : p),
           buildMode: 'none',
         }
+        checkWin()
         applyGameState()
         return
       }
     },
     onEdgeClick(id: string) {
+      if (state.phase === 'game-over') return
       // ─── Initial placement ─────────────────────────────────────
       if (state.phase === 'initial-placement') {
         if (state.initialPlacementStep !== 'place-road') return

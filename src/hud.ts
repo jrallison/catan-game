@@ -1,5 +1,5 @@
 import { GameState, Player, BuildMode } from './gameState'
-import { BUILD_COSTS, canAfford } from './gameMechanics'
+import { BUILD_COSTS, canAfford, calculateVP } from './gameMechanics'
 
 const RESOURCE_ICONS: Record<string, string> = {
   wood:  '🪵',
@@ -126,11 +126,12 @@ export function createHud(opts: {
 
   function renderPlayerPanel(player: Player, isActive: boolean): string {
     const h = player.hand
+    const vp = calculateVP(player)
     const border = isActive ? `border: 2px solid ${player.colorHex};` : 'border: 2px solid transparent;'
     return `
       <div style="flex:1; ${border} border-radius: 8px; padding: 8px 10px; margin: 0 4px; background: rgba(255,255,255,0.06);">
         <div style="font-weight: bold; color: ${player.colorHex}; margin-bottom: 4px;">
-          ● Player ${player.id + 1}${isActive ? ' ◀' : ''}
+          ● Player ${player.id + 1} (${player.color})${isActive ? ' ◀' : ''} — ${vp} VP
         </div>
         <div style="font-size: 13px; line-height: 1.6;">
           ${RESOURCE_ICONS.wood} ${h.wood} &nbsp;
@@ -152,9 +153,55 @@ export function createHud(opts: {
   `
   container.appendChild(statusBar)
 
+  // ─── Win overlay ─────────────────────────────────────────────────────
+  const winOverlay = document.createElement('div')
+  winOverlay.style.cssText = `
+    display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.75); z-index: 200;
+    display: none; justify-content: center; align-items: center;
+    font-family: 'Segoe UI', sans-serif;
+  `
+  document.body.appendChild(winOverlay)
+
+  function showWinScreen(state: GameState): void {
+    const winner = state.players.find(p => p.color === state.winner)!
+    const vp = calculateVP(winner)
+    winOverlay.style.display = 'flex'
+    winOverlay.innerHTML = `
+      <div style="
+        background: rgba(20,20,30,0.95); border-radius: 16px; padding: 48px 64px;
+        text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+        border: 2px solid ${winner.colorHex};
+      ">
+        <div style="font-size: 48px; margin-bottom: 12px;">🏆</div>
+        <div style="font-size: 28px; font-weight: bold; color: ${winner.colorHex}; margin-bottom: 8px;">
+          Player ${winner.id + 1} Wins!
+        </div>
+        <div style="font-size: 18px; color: rgba(255,255,255,0.8); margin-bottom: 28px;">
+          Final score: ${vp} VP
+        </div>
+        <button id="play-again-btn" style="
+          background: ${winner.colorHex}; color: white; border: none;
+          padding: 12px 32px; border-radius: 8px; font-size: 16px;
+          font-weight: bold; cursor: pointer;
+        ">Play Again</button>
+      </div>
+    `
+    document.getElementById('play-again-btn')!.addEventListener('click', () => {
+      window.location.reload()
+    })
+  }
+
   // ─── Public API ─────────────────────────────────────────────────────
   return {
     update(state: GameState) {
+      // ─── Game over ─────────────────────────────────────────────
+      if (state.phase === 'game-over') {
+        container.style.display = 'none'
+        showWinScreen(state)
+        return
+      }
+
       const player = state.players[state.currentPlayerIndex]
 
       if (state.phase === 'initial-placement') {

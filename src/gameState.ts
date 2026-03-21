@@ -27,6 +27,7 @@ export interface Player {
 export type GamePhase =
   | 'initial-placement'
   | 'main-game'         // P1-3
+  | 'game-over'
 
 export type InitialPlacementStep =
   | 'place-settlement'
@@ -51,6 +52,8 @@ export interface GameState {
   lastRoll: [number, number] | null
   // Build mode
   buildMode: BuildMode
+  // Victory
+  winner: PlayerColor | null
 }
 
 export function createInitialGameState(): GameState {
@@ -70,5 +73,6 @@ export function createInitialGameState(): GameState {
     turnPhase: 'roll',
     lastRoll: null,
     buildMode: 'none',
+    winner: null,
   }
 }
