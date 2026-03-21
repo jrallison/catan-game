@@ -429,9 +429,9 @@ function placeTileInstance(scene: Scene, tile: HexTile, template: Mesh): void {
       baseInstance.rotationQuaternion = null
       baseInstance.rotation.copyFromFloats(0, Math.PI / 6, 0)
       baseInstance.scaling.copyFromFloats(1, 1, 1)
-      // Y=-0.15: aligns base INNER edge top (Z=4.997 blender × 0.057 = 0.285) with
-// terrain tile OUTER edge top (Z=2.4 blender × 0.0568 = 0.136). 0.136-0.285=-0.149≈-0.15
-baseInstance.position.set(x, -0.15, z)
+      // Y=-0.29: buries inner wall ramp below Y=0 (inner wall top = -0.29+0.285 = -0.005).
+// Border road surface sits at ~0.104, slightly below tile rim (0.136) — clean step, no ramp.
+baseInstance.position.set(x, -0.29, z)
     }
   }
 }
