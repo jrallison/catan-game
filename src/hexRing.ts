@@ -77,8 +77,8 @@ function createOneRing(scene: Scene, cx: number, cz: number, colorHex: string, n
     const base = vi
     positions.push(...v0, ...v1, ...v2, ...v3)
     normals.push(...n, ...n, ...n, ...n)
-    // CW triangles: (0,1,2) and (0,2,3)
-    indices.push(base, base + 1, base + 2, base, base + 2, base + 3)
+    // CW in Babylon left-handed (flip from CCW): (0,2,1) and (0,3,2)
+    indices.push(base, base + 2, base + 1, base, base + 3, base + 2)
     vi += 4
   }
 
