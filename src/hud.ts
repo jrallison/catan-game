@@ -1,4 +1,5 @@
-import { GameState, Player } from './gameState'
+import { GameState, Player, BuildMode } from './gameState'
+import { BUILD_COSTS, canAfford } from './gameMechanics'
 
 const RESOURCE_ICONS: Record<string, string> = {
   wood:  '🪵',
@@ -11,6 +12,7 @@ const RESOURCE_ICONS: Record<string, string> = {
 export function createHud(opts: {
   onRoll: () => void
   onEndTurn: () => void
+  onBuildMode: (mode: BuildMode) => void
 }): {
   update: (state: GameState) => void
   showDiceResult: (dice: [number, number]) => void
@@ -62,6 +64,59 @@ export function createHud(opts: {
   endTurnBtn.addEventListener('click', () => opts.onEndTurn())
   topBar.appendChild(endTurnBtn)
 
+  // ─── Build panel ─────────────────────────────────────────────────────
+  const buildPanel = document.createElement('div')
+  buildPanel.style.cssText = `
+    display: none; padding: 6px 16px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+  `
+  container.appendChild(buildPanel)
+
+  function makeBuildButton(label: string, costText: string, mode: BuildMode): HTMLButtonElement {
+    const btn = document.createElement('button')
+    btn.innerHTML = `${label} <span style="font-size:12px;opacity:0.8">${costText}</span>`
+    btn.style.cssText = `
+      background: rgba(255,255,255,0.12); color: white; border: 1px solid rgba(255,255,255,0.2);
+      padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
+      margin-right: 6px; transition: opacity 0.2s, background 0.2s;
+    `
+    btn.addEventListener('click', () => opts.onBuildMode(mode))
+    return btn
+  }
+
+  const roadBtn = makeBuildButton('🛤 Road', '🪵1 🧱1', 'road')
+  const settlementBtn = makeBuildButton('🏠 Settlement', '🪵1 🧱1 🌾1 🐑1', 'settlement')
+  const cityBtn = makeBuildButton('🏙 City', '⛏3 🌾2', 'city')
+  buildPanel.appendChild(roadBtn)
+  buildPanel.appendChild(settlementBtn)
+  buildPanel.appendChild(cityBtn)
+
+  function updateBuildButtons(state: GameState): void {
+    const player = state.players[state.currentPlayerIndex]
+    const canRoad = canAfford(player.hand, BUILD_COSTS.road)
+    const canSettlement = canAfford(player.hand, BUILD_COSTS.settlement)
+    const canCity = canAfford(player.hand, BUILD_COSTS.city)
+
+    roadBtn.disabled = !canRoad
+    roadBtn.style.opacity = canRoad ? '1' : '0.35'
+    roadBtn.style.cursor = canRoad ? 'pointer' : 'default'
+
+    settlementBtn.disabled = !canSettlement
+    settlementBtn.style.opacity = canSettlement ? '1' : '0.35'
+    settlementBtn.style.cursor = canSettlement ? 'pointer' : 'default'
+
+    cityBtn.disabled = !canCity
+    cityBtn.style.opacity = canCity ? '1' : '0.35'
+    cityBtn.style.cursor = canCity ? 'pointer' : 'default'
+
+    // Highlight active build mode
+    const activeBg = 'rgba(32,200,100,0.3)'
+    const normalBg = 'rgba(255,255,255,0.12)'
+    roadBtn.style.background = state.buildMode === 'road' ? activeBg : normalBg
+    settlementBtn.style.background = state.buildMode === 'settlement' ? activeBg : normalBg
+    cityBtn.style.background = state.buildMode === 'city' ? activeBg : normalBg
+  }
+
   // ─── Player panels ──────────────────────────────────────────────────
   const playersRow = document.createElement('div')
   playersRow.style.cssText = `
@@ -106,6 +161,7 @@ export function createHud(opts: {
         // Hide main-game controls during placement
         rollBtn.style.display = 'none'
         endTurnBtn.style.display = 'none'
+        buildPanel.style.display = 'none'
         diceDisplay.textContent = ''
         playersRow.style.display = 'none'
         statusBar.style.display = 'block'
@@ -131,14 +187,18 @@ export function createHud(opts: {
         rollBtn.style.opacity = '1'
         rollBtn.disabled = false
         endTurnBtn.style.display = 'none'
+        buildPanel.style.display = 'none'
       } else if (state.turnPhase === 'build') {
         rollBtn.style.display = 'inline-block'
         rollBtn.style.opacity = '0.4'
         rollBtn.disabled = true
         endTurnBtn.style.display = 'inline-block'
+        buildPanel.style.display = 'flex'
+        updateBuildButtons(state)
       } else {
         rollBtn.style.display = 'none'
         endTurnBtn.style.display = 'none'
+        buildPanel.style.display = 'none'
       }
 
       // Player resource panels

@@ -34,6 +34,8 @@ export type InitialPlacementStep =
 
 export type TurnPhase = 'roll' | 'build' | 'done'
 
+export type BuildMode = 'none' | 'road' | 'settlement' | 'city'
+
 export interface GameState {
   phase: GamePhase
   players: Player[]
@@ -47,6 +49,8 @@ export interface GameState {
   // Main game turn state
   turnPhase: TurnPhase
   lastRoll: [number, number] | null
+  // Build mode
+  buildMode: BuildMode
 }
 
 export function createInitialGameState(): GameState {
@@ -65,5 +69,6 @@ export function createInitialGameState(): GameState {
     lastPlacedSettlement: null,
     turnPhase: 'roll',
     lastRoll: null,
+    buildMode: 'none',
   }
 }

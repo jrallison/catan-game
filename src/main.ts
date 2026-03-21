@@ -6,7 +6,12 @@ import { renderNumberTokens } from './numberToken'
 import { buildBoardGraph } from './boardGraph'
 import { createBoardOverlay } from './boardOverlay'
 import { createInitialGameState, GameState } from './gameState'
-import { getValidSettlementPlacements, getValidRoadPlacements, placeSettlement, placeRoad, distributeResources } from './gameMechanics'
+import {
+  getValidSettlementPlacements, getValidRoadPlacements, placeSettlement, placeRoad,
+  distributeResources, BUILD_COSTS, deductCost,
+  getValidSettlementBuildLocations, getValidRoadBuildLocations, getValidCityUpgrades,
+} from './gameMechanics'
+import { BuildMode } from './gameState'
 import { createHud } from './hud'
 
 async function main(): Promise<void> {
@@ -64,11 +69,19 @@ async function main(): Promise<void> {
       currentPlayerIndex: nextPlayer,
       turnPhase: 'roll',
       lastRoll: null,
+      buildMode: 'none',
     }
     applyGameState()
   }
 
-  const hud = createHud({ onRoll: handleRoll, onEndTurn: handleEndTurn })
+  function handleBuildMode(mode: BuildMode): void {
+    if (state.phase !== 'main-game' || state.turnPhase !== 'build') return
+    // Toggle: clicking same mode cancels it
+    state = { ...state, buildMode: state.buildMode === mode ? 'none' : mode }
+    applyGameState()
+  }
+
+  const hud = createHud({ onRoll: handleRoll, onEndTurn: handleEndTurn, onBuildMode: handleBuildMode })
 
   function applyGameState(): void {
     const player = state.players[state.currentPlayerIndex]
@@ -119,21 +132,38 @@ async function main(): Promise<void> {
     }
 
     if (state.phase === 'main-game') {
-      // Show all placed pieces, dim everything else
+      // Compute valid placements for build mode
+      const validSettlements = state.buildMode === 'settlement'
+        ? new Set(getValidSettlementBuildLocations(state, graph)) : new Set<string>()
+      const validRoads = state.buildMode === 'road'
+        ? new Set(getValidRoadBuildLocations(state, graph)) : new Set<string>()
+      const validCities = state.buildMode === 'city'
+        ? new Set(getValidCityUpgrades(state)) : new Set<string>()
+
       for (const [id] of graph.vertices) {
-        const isOccupied = state.players.some(p => p.settlements.includes(id) || p.cities.includes(id))
-        if (isOccupied) {
-          const owner = state.players.find(p => p.settlements.includes(id) || p.cities.includes(id))!
-          overlay.setVertexState(id, `player-${owner.color}`)
+        const settlementOwner = state.players.find(p => p.settlements.includes(id))
+        const cityOwner = state.players.find(p => p.cities.includes(id))
+        if (cityOwner) {
+          overlay.setVertexState(id, `player-${cityOwner.color}-city`)
+        } else if (settlementOwner) {
+          // If in city build mode and this is a valid upgrade target, show golden
+          if (state.buildMode === 'city' && validCities.has(id)) {
+            overlay.setVertexState(id, 'valid-city')
+          } else {
+            overlay.setVertexState(id, `player-${settlementOwner.color}`)
+          }
+        } else if (state.buildMode === 'settlement' && validSettlements.has(id)) {
+          overlay.setVertexState(id, 'valid')
         } else {
           overlay.setVertexState(id, 'invalid')
         }
       }
       for (const [id] of graph.edges) {
-        const isOccupied = state.players.some(p => p.roads.includes(id))
-        if (isOccupied) {
-          const owner = state.players.find(p => p.roads.includes(id))!
-          overlay.setEdgeState(id, `player-${owner.color}`)
+        const roadOwner = state.players.find(p => p.roads.includes(id))
+        if (roadOwner) {
+          overlay.setEdgeState(id, `player-${roadOwner.color}`)
+        } else if (state.buildMode === 'road' && validRoads.has(id)) {
+          overlay.setEdgeState(id, 'valid')
         } else {
           overlay.setEdgeState(id, 'invalid')
         }
@@ -146,20 +176,73 @@ async function main(): Promise<void> {
   // Create overlay with click handlers
   const overlay = createBoardOverlay(scene, graph, {
     onVertexClick(id: string) {
-      if (state.phase !== 'initial-placement') return
-      if (state.initialPlacementStep !== 'place-settlement') return
-      const valid = getValidSettlementPlacements(state, graph)
-      if (!valid.includes(id)) return
-      state = placeSettlement(id, state)
-      applyGameState()
+      // ─── Initial placement ─────────────────────────────────────
+      if (state.phase === 'initial-placement') {
+        if (state.initialPlacementStep !== 'place-settlement') return
+        const valid = getValidSettlementPlacements(state, graph)
+        if (!valid.includes(id)) return
+        state = placeSettlement(id, state)
+        applyGameState()
+        return
+      }
+      // ─── Build mode: settlement ────────────────────────────────
+      if (state.buildMode === 'settlement') {
+        const valid = getValidSettlementBuildLocations(state, graph)
+        if (!valid.includes(id)) return
+        state = {
+          ...state,
+          players: state.players.map((p, i) => i === state.currentPlayerIndex
+            ? { ...p, settlements: [...p.settlements, id], hand: deductCost(p.hand, BUILD_COSTS.settlement) }
+            : p),
+          buildMode: 'none',
+        }
+        applyGameState()
+        return
+      }
+      // ─── Build mode: city upgrade ──────────────────────────────
+      if (state.buildMode === 'city') {
+        const valid = getValidCityUpgrades(state)
+        if (!valid.includes(id)) return
+        state = {
+          ...state,
+          players: state.players.map((p, i) => i === state.currentPlayerIndex
+            ? {
+                ...p,
+                settlements: p.settlements.filter(s => s !== id),
+                cities: [...p.cities, id],
+                hand: deductCost(p.hand, BUILD_COSTS.city),
+              }
+            : p),
+          buildMode: 'none',
+        }
+        applyGameState()
+        return
+      }
     },
     onEdgeClick(id: string) {
-      if (state.phase !== 'initial-placement') return
-      if (state.initialPlacementStep !== 'place-road') return
-      const valid = getValidRoadPlacements(state, graph)
-      if (!valid.includes(id)) return
-      state = placeRoad(id, state)
-      applyGameState()
+      // ─── Initial placement ─────────────────────────────────────
+      if (state.phase === 'initial-placement') {
+        if (state.initialPlacementStep !== 'place-road') return
+        const valid = getValidRoadPlacements(state, graph)
+        if (!valid.includes(id)) return
+        state = placeRoad(id, state)
+        applyGameState()
+        return
+      }
+      // ─── Build mode: road ──────────────────────────────────────
+      if (state.buildMode === 'road') {
+        const valid = getValidRoadBuildLocations(state, graph)
+        if (!valid.includes(id)) return
+        state = {
+          ...state,
+          players: state.players.map((p, i) => i === state.currentPlayerIndex
+            ? { ...p, roads: [...p.roads, id], hand: deductCost(p.hand, BUILD_COSTS.road) }
+            : p),
+          buildMode: 'none',
+        }
+        applyGameState()
+        return
+      }
     },
   })
 

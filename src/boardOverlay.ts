@@ -36,22 +36,40 @@ const EMISSIVE_VALID    = new Color3(0.2, 1.0, 0.2)    // bright green — valid
 const EMISSIVE_INVALID  = new Color3(0.3, 0.3, 0.3)    // dimmed — can't place here
 const EMISSIVE_RED      = new Color3(0.9, 0.2, 0.2)    // player red settlement/road
 const EMISSIVE_BLUE     = new Color3(0.2, 0.5, 0.9)    // player blue settlement/road
+const EMISSIVE_GOLD     = new Color3(1.0, 0.85, 0.2)   // golden glow for valid city upgrade
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type MarkerState = 'empty' | 'hover' | 'occupied' | 'valid' | 'invalid' | 'player-red' | 'player-blue'
+export type MarkerState = 'empty' | 'hover' | 'occupied' | 'valid' | 'invalid'
+  | 'player-red' | 'player-blue'
+  | 'player-red-city' | 'player-blue-city'
+  | 'valid-city'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function emissiveForState(state: MarkerState): Color3 {
   switch (state) {
-    case 'empty':       return EMISSIVE_DEFAULT.clone()
-    case 'hover':       return EMISSIVE_HOVER.clone()
-    case 'occupied':    return EMISSIVE_OCCUPIED.clone()
-    case 'valid':       return EMISSIVE_VALID.clone()
-    case 'invalid':     return EMISSIVE_INVALID.clone()
-    case 'player-red':  return EMISSIVE_RED.clone()
-    case 'player-blue': return EMISSIVE_BLUE.clone()
+    case 'empty':            return EMISSIVE_DEFAULT.clone()
+    case 'hover':            return EMISSIVE_HOVER.clone()
+    case 'occupied':         return EMISSIVE_OCCUPIED.clone()
+    case 'valid':            return EMISSIVE_VALID.clone()
+    case 'invalid':          return EMISSIVE_INVALID.clone()
+    case 'player-red':       return EMISSIVE_RED.clone()
+    case 'player-blue':      return EMISSIVE_BLUE.clone()
+    case 'player-red-city':  return EMISSIVE_RED.clone()
+    case 'player-blue-city': return EMISSIVE_BLUE.clone()
+    case 'valid-city':       return EMISSIVE_GOLD.clone()
+  }
+}
+
+/** Returns the scale factor for a vertex marker based on state */
+function scaleForState(state: MarkerState): number {
+  switch (state) {
+    case 'player-red-city':
+    case 'player-blue-city':
+      return 1.4
+    default:
+      return 1.0
   }
 }
 
@@ -105,8 +123,8 @@ export function createBoardOverlay(
     disc.actionManager.registerAction(
       new ExecuteCodeAction(ActionManager.OnPointerOverTrigger, () => {
         const currentState = vertexStates.get(id) || 'empty'
-        // Only hover-highlight if it's a valid placement
-        if (currentState === 'valid') {
+        // Only hover-highlight if it's a valid placement or city upgrade
+        if (currentState === 'valid' || currentState === 'valid-city') {
           mat.emissiveColor = EMISSIVE_HOVER.clone()
         }
       })
@@ -190,9 +208,12 @@ export function createBoardOverlay(
 
   function setVertexState(id: string, state: MarkerState): void {
     const mat = vertexMaterials.get(id)
-    if (!mat) return
+    const mesh = vertexMeshes.get(id)
+    if (!mat || !mesh) return
     vertexStates.set(id, state)
     mat.emissiveColor = emissiveForState(state)
+    const s = scaleForState(state)
+    mesh.scaling.set(s, 1, s)  // scale XZ only (diameter), keep Y (height)
   }
 
   function setEdgeState(id: string, state: MarkerState): void {
