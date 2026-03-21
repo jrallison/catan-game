@@ -1,6 +1,7 @@
 import { createScene } from './scene'
 import { createStandardBoard } from './board'
 import { renderTiles } from './tileRenderer'
+import { createHexRings } from './hexRing'
 import { renderNumberTokens } from './numberToken'
 import { buildBoardGraph } from './boardGraph'
 import { createBoardOverlay } from './boardOverlay'
@@ -13,8 +14,11 @@ async function main(): Promise<void> {
   // Create the standard Catan board
   const board = createStandardBoard()
 
-  // Render hex tiles from STL models
+  // Render hex tiles from GLB models
   await renderTiles(scene, board)
+
+  // Create procedural hex rings around each tile
+  createHexRings(scene, board)
 
   // Render number tokens on land tiles
   await renderNumberTokens(scene, board)

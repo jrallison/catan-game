@@ -44,10 +44,7 @@ import { axialToWorld } from './board'
  * A regular flat-top hex with that edge-to-edge width has corner-to-corner ≈ 4.2.
  */
 const TARGET_TILE_DIAMETER = 4.2
-// axialToWorld size=2.45 → center-to-center = 2.45 × √3 = 4.24.
-// Bases scale to 4.9 (= size × 2). Border width = 2.45 - 2.1 = 0.35 per side (down from 0.50).
-// Minimum viable size before tile corners start overlapping (need center-to-center > 4.2).
-const TARGET_BASE_DIAMETER = 4.9
+
 
 /** GLB filename per tile type (served from /assets/). */
 const TILE_GLB_MAP: Record<TileType, string> = {
@@ -61,17 +58,7 @@ const TILE_GLB_MAP: Record<TileType, string> = {
   harbor_water: 'harbor_water.glb',
 }
 
-/** GLB filename per tile type for landscape base rings (served from /assets/). */
-const BASE_GLB_MAP: Partial<Record<TileType, string>> = {
-  ore:          'landscape_bases/base_ore.glb',
-  wheat:        'landscape_bases/base_wheet.glb',
-  brick:        'landscape_bases/base_brick.glb',
-  wood:         'landscape_bases/base_wood.glb',
-  wool:         'landscape_bases/base_wool.glb',
-  desert:       'landscape_bases/base_desert.glb',
-  water:        'landscape_bases/base_water.glb',
-  harbor_water: 'landscape_bases/base_water.glb',  // reuse water base
-}
+
 
 /** Water and harbor tiles get slight transparency. */
 const WATER_ALPHA = 0.85
@@ -266,104 +253,6 @@ async function loadTemplateMesh(scene: Scene, tileType: TileType): Promise<Mesh>
   return templateMesh
 }
 
-// ─── Landscape Base Pipeline ─────────────────────────────────────────────────
-
-/** Cached base template meshes keyed by tile type. Hidden; used only for cloning. */
-const baseTemplateCache: Map<TileType, Mesh> = new Map()
-
-/**
- * Load a landscape base GLB, bake geometry with the same coordinate pipeline
- * as tile meshes, and return a hidden template mesh ready for cloning.
- *
- * Uses a simple StandardMaterial with vertex colors (no emissive lift).
- */
-async function loadBaseTemplateMesh(scene: Scene, tileType: TileType): Promise<Mesh | null> {
-  const cached = baseTemplateCache.get(tileType)
-  if (cached) return cached
-
-  const glbPath = BASE_GLB_MAP[tileType]
-  if (!glbPath) return null
-
-  // Step 1: Import GLB
-  const result = await SceneLoader.ImportMeshAsync('', '/assets/', glbPath, scene)
-
-  // Step 2: Find the mesh with geometry
-  const srcMesh = findGeometryMesh(result.meshes)
-  if (!srcMesh) {
-    throw new Error(`Base GLB for "${tileType}" (${glbPath}) has no mesh with position data`)
-  }
-
-  const rawPositions = srcMesh.getVerticesData(VertexBuffer.PositionKind)
-  if (!rawPositions) {
-    throw new Error(`Failed to read positions from base "${tileType}" GLB`)
-  }
-  const rawNormals = srcMesh.getVerticesData(VertexBuffer.NormalKind)
-  const rawColors  = srcMesh.getVerticesData(VertexBuffer.ColorKind)
-  const indices    = srcMesh.getIndices()
-
-  const positions = new Float32Array(rawPositions)
-  const normals   = rawNormals ? new Float32Array(rawNormals) : null
-
-  // Z-negate positions (Blender right-handed → Babylon left-handed)
-  for (let i = 0; i < positions.length; i += 3) {
-    positions[i + 2] = -positions[i + 2]
-  }
-  // Z-negate normals from GLB (use directly, no ComputeNormals)
-  if (normals) {
-    for (let i = 0; i < normals.length; i += 3) {
-      normals[i + 2] = -normals[i + 2]
-    }
-  }
-
-  const fixedIndices = indices ? new Int32Array(indices) : null
-
-  // Scale bases to flat-to-flat diameter so adjacent bases don't overlap
-  const bounds = computeBounds(positions)
-  scaleAndCenter(positions, bounds, TARGET_BASE_DIAMETER)
-
-  // Build baked template mesh
-  const templateMesh = new Mesh(`base_template_${tileType}`, scene)
-  const vertexData = new VertexData()
-  vertexData.positions = positions
-  if (fixedIndices) {
-    vertexData.indices = fixedIndices
-    if (normals) {
-      vertexData.normals = normals
-    } else {
-      const recomputedNormals = new Float32Array(positions.length)
-      VertexData.ComputeNormals(positions, fixedIndices, recomputedNormals)
-      for (let i = 0; i < recomputedNormals.length; i++) {
-        recomputedNormals[i] = -recomputedNormals[i]
-      }
-      vertexData.normals = recomputedNormals
-    }
-  }
-  if (rawColors) vertexData.colors = new Float32Array(rawColors)
-  vertexData.applyToMesh(templateMesh, true)
-
-  // Reset transform
-  templateMesh.rotationQuaternion = null
-  templateMesh.rotation.copyFromFloats(0, 0, 0)
-  templateMesh.scaling.copyFromFloats(1, 1, 1)
-  templateMesh.position.copyFromFloats(0, 0, 0)
-  templateMesh.setEnabled(false)
-
-  // Simple material: vertex colors provide color, no emissive lift
-  const baseMat = new StandardMaterial(`mat_base_${tileType}`, scene)
-  baseMat.diffuseColor = Color3.White()
-  baseMat.specularColor = Color3.Black()
-  baseMat.backFaceCulling = true
-  templateMesh.material = baseMat
-
-  // Dispose imported GLB meshes
-  for (const m of result.meshes) {
-    if (!m.isDisposed()) m.dispose()
-  }
-
-  baseTemplateCache.set(tileType, templateMesh)
-  return templateMesh
-}
-
 // ─── Material Pipeline ───────────────────────────────────────────────────────
 
 /** Cached self-lit materials keyed by tile type. */
@@ -414,22 +303,6 @@ function placeTileInstance(scene: Scene, tile: HexTile, template: Mesh): void {
   instance.useVertexColors = true
 
   instance.material = getOrCreateMaterial(scene, tile.type)
-
-  // Place landscape base ring at same position — outer ring fills gap between tiles.
-  // Base GLBs are pointy-top (Z extent > X extent); terrain tiles are flat-top.
-  // Rotate base 30° (π/6) around Y to align orientations.
-  const baseTemplate = baseTemplateCache.get(tile.type)
-  if (baseTemplate) {
-    const baseInstance = baseTemplate.clone(`base_${tile.q}_${tile.r}`)
-    if (baseInstance) {
-      baseInstance.setEnabled(true)
-      baseInstance.parent = null
-      baseInstance.rotationQuaternion = null
-      baseInstance.rotation.copyFromFloats(0, Math.PI / 6, 0)
-      baseInstance.scaling.copyFromFloats(1, 1, 1)
-      baseInstance.position.set(x, -0.23, z)
-    }
-  }
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -441,12 +314,9 @@ function placeTileInstance(scene: Scene, tile: HexTile, template: Mesh): void {
  * 2. Clones and positions each tile instance on the board.
  */
 export async function renderTiles(scene: Scene, tiles: HexTile[]): Promise<void> {
-  // Pre-load all unique tile types in parallel (tiles + bases)
+  // Pre-load all unique tile types in parallel
   const uniqueTypes = [...new Set(tiles.map(t => t.type))]
-  await Promise.all([
-    ...uniqueTypes.map(type => loadTemplateMesh(scene, type)),
-    ...uniqueTypes.map(type => loadBaseTemplateMesh(scene, type)),
-  ])
+  await Promise.all(uniqueTypes.map(type => loadTemplateMesh(scene, type)))
 
   // Place each tile
   for (const tile of tiles) {
