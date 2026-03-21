@@ -13,6 +13,7 @@ import {
   calculateVP,
 } from './gameMechanics'
 import { createHud } from './hud'
+import { PieceRenderer } from './pieceRenderer'
 
 async function main(): Promise<void> {
   const canvas = document.getElementById('renderCanvas') as HTMLCanvasElement
@@ -42,6 +43,10 @@ async function main(): Promise<void> {
       numberTokens.set(`${tile.q},${tile.r}`, tile.number)
     }
   }
+
+  // ─── Piece renderer (3D settlement/city models) ─────────────────────
+  const pieceRenderer = new PieceRenderer(scene)
+  await pieceRenderer.loadTemplates()
 
   // ─── Game state ────────────────────────────────────────────────────
   let state: GameState = createInitialGameState()
@@ -95,6 +100,36 @@ async function main(): Promise<void> {
 
   const hud = createHud({ onRoll: handleRoll, onEndTurn: handleEndTurn, onBuildMode: handleBuildMode })
 
+  /** Sync 3D piece meshes to match current game state */
+  function syncPieces(): void {
+    // Collect all vertex ids that should have pieces
+    const allSettlements = new Map<string, { color: import('./gameState').PlayerColor }>()
+    const allCities = new Map<string, { color: import('./gameState').PlayerColor }>()
+
+    for (const player of state.players) {
+      for (const vid of player.settlements) {
+        allSettlements.set(vid, { color: player.color })
+      }
+      for (const vid of player.cities) {
+        allCities.set(vid, { color: player.color })
+      }
+    }
+
+    // Place settlements (only if not already placed)
+    for (const [vid, { color }] of allSettlements) {
+      if (!pieceRenderer.hasPiece(vid)) {
+        const v = graph.vertices.get(vid)
+        if (v) pieceRenderer.placeSettlement(vid, v.x, v.z, color)
+      }
+    }
+
+    // Upgrade cities (upgradeToCity handles removing the old settlement mesh)
+    for (const [vid, { color }] of allCities) {
+      const v = graph.vertices.get(vid)
+      if (v) pieceRenderer.upgradeToCity(vid, v.x, v.z, color)
+    }
+  }
+
   function applyGameState(): void {
     const player = state.players[state.currentPlayerIndex]
 
@@ -104,8 +139,8 @@ async function main(): Promise<void> {
         for (const [id] of graph.vertices) {
           const isOccupied = state.players.some(p => p.settlements.includes(id) || p.cities.includes(id))
           if (isOccupied) {
-            const owner = state.players.find(p => p.settlements.includes(id) || p.cities.includes(id))!
-            overlay.setVertexState(id, `player-${owner.color}`)
+            // 3D model is rendered; hide the disc but keep it pickable
+            overlay.setVertexState(id, 'piece-placed')
           } else {
             overlay.setVertexState(id, valid.has(id) ? 'valid' : 'invalid')
           }
@@ -125,8 +160,7 @@ async function main(): Promise<void> {
         for (const [id] of graph.vertices) {
           const isOccupied = state.players.some(p => p.settlements.includes(id) || p.cities.includes(id))
           if (isOccupied) {
-            const owner = state.players.find(p => p.settlements.includes(id) || p.cities.includes(id))!
-            overlay.setVertexState(id, `player-${owner.color}`)
+            overlay.setVertexState(id, 'piece-placed')
           } else {
             overlay.setVertexState(id, 'invalid')
           }
@@ -156,13 +190,15 @@ async function main(): Promise<void> {
         const settlementOwner = state.players.find(p => p.settlements.includes(id))
         const cityOwner = state.players.find(p => p.cities.includes(id))
         if (cityOwner) {
-          overlay.setVertexState(id, `player-${cityOwner.color}-city`)
+          // 3D city model is rendered; hide disc but keep pickable
+          overlay.setVertexState(id, 'piece-placed')
         } else if (settlementOwner) {
-          // If in city build mode and this is a valid upgrade target, show golden
+          // If in city build mode and this is a valid upgrade target, show golden ring
           if (state.buildMode === 'city' && validCities.has(id)) {
             overlay.setVertexState(id, 'valid-city')
           } else {
-            overlay.setVertexState(id, `player-${settlementOwner.color}`)
+            // 3D settlement model is rendered; hide disc but keep pickable
+            overlay.setVertexState(id, 'piece-placed')
           }
         } else if (state.buildMode === 'settlement' && validSettlements.has(id)) {
           overlay.setVertexState(id, 'valid')
@@ -181,6 +217,9 @@ async function main(): Promise<void> {
         }
       }
     }
+
+    // Sync 3D piece meshes after overlay state
+    syncPieces()
 
     hud.update(state)
   }

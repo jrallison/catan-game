@@ -43,6 +43,7 @@ const EMISSIVE_GOLD     = new Color3(1.0, 0.85, 0.2)   // golden glow for valid 
 export type MarkerState = 'empty' | 'hover' | 'occupied' | 'valid' | 'invalid'
   | 'player-red' | 'player-blue'
   | 'player-red-city' | 'player-blue-city'
+  | 'piece-placed'       // invisible but still pickable for city upgrade
   | 'valid-city'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -58,6 +59,7 @@ function emissiveForState(state: MarkerState): Color3 {
     case 'player-blue':      return EMISSIVE_BLUE.clone()
     case 'player-red-city':  return EMISSIVE_RED.clone()
     case 'player-blue-city': return EMISSIVE_BLUE.clone()
+    case 'piece-placed':     return Color3.Black()
     case 'valid-city':       return EMISSIVE_GOLD.clone()
   }
 }
@@ -214,6 +216,15 @@ export function createBoardOverlay(
     mat.emissiveColor = emissiveForState(state)
     const s = scaleForState(state)
     mesh.scaling.set(s, 1, s)  // scale XZ only (diameter), keep Y (height)
+
+    // piece-placed: invisible disc but still pickable (for city upgrade clicks)
+    if (state === 'piece-placed') {
+      mesh.isVisible = false
+      mesh.isPickable = true
+    } else {
+      mesh.isVisible = true
+      mesh.isPickable = true
+    }
   }
 
   function setEdgeState(id: string, state: MarkerState): void {
