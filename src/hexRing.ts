@@ -24,8 +24,8 @@ const RING_COLORS: Partial<Record<TileType, string>> = {
   wood:         '#5d9435',   // forest green
   brick:        '#9e4a28',   // terracotta
   ore:          '#808080',   // medium gray
-  wheat:        '#E6B200',   // darker gold
-  wool:         '#3a7a28',   // deep green (distinct from bright lime tile)
+  wheat:        '#E6B200',   // darker gold — matches wheet tile base (palette 16)
+  wool:         '#66FF33',   // light green — matches wool tile base (palette 6)
   desert:       '#FFD966',   // warm sand
   water:        '#1a5a6b',   // deep water blue
   harbor_water: '#1a5a6b',
