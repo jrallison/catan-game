@@ -34,8 +34,8 @@ const EMISSIVE_HOVER    = new Color3(1.0, 0.85, 0)     // yellow
 const EMISSIVE_OCCUPIED = new Color3(0.2, 0.8, 0.2)    // green (legacy)
 const EMISSIVE_VALID    = new Color3(0.2, 1.0, 0.2)    // bright green — valid placement
 const EMISSIVE_INVALID  = new Color3(0.3, 0.3, 0.3)    // dimmed — can't place here
-const EMISSIVE_RED      = new Color3(0.9, 0.2, 0.2)    // player red settlement/road
-const EMISSIVE_BLUE     = new Color3(0.2, 0.5, 0.9)    // player blue settlement/road
+const EMISSIVE_RED      = new Color3(0.95, 0.1, 0.1)   // player red settlement/road
+const EMISSIVE_BLUE     = new Color3(0.15, 0.45, 1.0)  // player blue settlement/road
 const EMISSIVE_GOLD     = new Color3(1.0, 0.85, 0.2)   // golden glow for valid city upgrade
 
 // ─── Types ───────────────────────────────────────────────────────────────────

@@ -46,17 +46,23 @@ const ROAD_SCALE       = 0.059   // 31.35 BU → 1.85 game units (nearly vertex-
 const PIECE_BASE_Y     = 0.10    // = RING_TOP_Y from hexRing.ts
 
 const PLAYER_COLORS: Record<PlayerColor, Color3> = {
-  red:  new Color3(0.9, 0.15, 0.15),
-  blue: new Color3(0.4, 0.65, 1.0),
+  red:  new Color3(0.95, 0.1, 0.1),
+  blue: new Color3(0.15, 0.45, 1.0),
+}
+
+interface PieceTemplate {
+  mesh: Mesh
+  originalColors: Float32Array | null
+  colorStride: number
 }
 
 // ─── PieceRenderer Class ─────────────────────────────────────────────────────
 
 export class PieceRenderer {
   private scene: Scene
-  private settlementTemplate: Mesh | null = null
-  private cityTemplate: Mesh | null = null
-  private roadTemplate: Mesh | null = null
+  private settlementTemplate: PieceTemplate | null = null
+  private cityTemplate: PieceTemplate | null = null
+  private roadTemplate: PieceTemplate | null = null
   /** vertexId or edgeId → placed mesh */
   private pieces = new Map<string, Mesh>()
 
@@ -66,13 +72,13 @@ export class PieceRenderer {
 
   async loadTemplates(): Promise<void> {
     this.settlementTemplate = await this.loadPieceGLB('/assets/settlements.glb', SETTLEMENT_SCALE)
-    this.settlementTemplate.setEnabled(false)
+    this.settlementTemplate.mesh.setEnabled(false)
 
     this.cityTemplate = await this.loadPieceGLB('/assets/cities.glb', CITY_SCALE)
-    this.cityTemplate.setEnabled(false)
+    this.cityTemplate.mesh.setEnabled(false)
 
     this.roadTemplate = await this.loadPieceGLB('/assets/roads.glb', ROAD_SCALE)
-    this.roadTemplate.setEnabled(false)
+    this.roadTemplate.mesh.setEnabled(false)
   }
 
   hasPiece(vertexId: string): boolean {
@@ -81,7 +87,7 @@ export class PieceRenderer {
 
   placeSettlement(vertexId: string, x: number, z: number, color: PlayerColor): void {
     if (this.pieces.has(vertexId)) return
-    const mesh = this.cloneTemplate(this.settlementTemplate!, `settlement_${vertexId}`, x, z, color)
+    const mesh = this.clonePieceTemplate(this.settlementTemplate!, `settlement_${vertexId}`, x, z, color)
     this.pieces.set(vertexId, mesh)
   }
 
@@ -92,14 +98,14 @@ export class PieceRenderer {
       existing.dispose()
       this.pieces.delete(vertexId)
     }
-    const mesh = this.cloneTemplate(this.cityTemplate!, `city_${vertexId}`, x, z, color)
+    const mesh = this.clonePieceTemplate(this.cityTemplate!, `city_${vertexId}`, x, z, color)
     this.pieces.set(vertexId, mesh)
   }
 
   placeRoad(edgeId: string, edge: BoardEdge, graph: BoardGraph, color: PlayerColor): void {
     if (this.pieces.has(edgeId)) return
 
-    const mesh = this.roadTemplate!.clone(`road_${edgeId}`)!
+    const mesh = this.roadTemplate!.mesh.clone(`road_${edgeId}`)!
     mesh.setEnabled(true)
     mesh.isPickable = false
 
@@ -132,19 +138,52 @@ export class PieceRenderer {
 
   // ─── Private Helpers ─────────────────────────────────────────────
 
-  private cloneTemplate(template: Mesh, name: string, x: number, z: number, color: PlayerColor): Mesh {
-    const mesh = template.clone(name)!
+  /**
+   * Clone a settlement/city template and tint only the roof vertices
+   * with the player's color. Walls and windows keep their original vertex colors.
+   */
+  private clonePieceTemplate(tmpl: PieceTemplate, name: string, x: number, z: number, color: PlayerColor): Mesh {
+    const mesh = tmpl.mesh.clone(name, null)!
     mesh.setEnabled(true)
     mesh.isPickable = false
     mesh.position.set(x, PIECE_BASE_Y, z)
 
+    // Apply per-piece vertex colors with player-colored roof
+    if (tmpl.originalColors) {
+      const tinted = this.tintRoofColor(tmpl.originalColors, PLAYER_COLORS[color])
+      mesh.makeGeometryUnique()
+      mesh.setVerticesData(VertexBuffer.ColorKind, tinted)
+    }
+
+    // Material: white diffuse so vertex colors show through; NO player color override
     const mat = new StandardMaterial(`piecemat_${name}`, this.scene)
-    mat.diffuseColor = PLAYER_COLORS[color].clone()
+    mat.diffuseColor = Color3.White()
     mat.specularColor = Color3.Black()
     mat.backFaceCulling = true
     mesh.material = mat
 
     return mesh
+  }
+
+  /**
+   * Tint orange/roof-zone vertices with the given player color.
+   * Detects roof by: R > 0.8, G in [0.5, 0.85], B < 0.15.
+   */
+  private tintRoofColor(originalColors: Float32Array, playerColor: Color3): Float32Array {
+    const colors = new Float32Array(originalColors)
+    const stride = 4 // RGBA
+
+    for (let i = 0; i < colors.length; i += stride) {
+      const r = colors[i], g = colors[i + 1], b = colors[i + 2]
+      // Detect orange/roof zone: high R, medium G (0.5–0.85), near-zero B
+      if (r > 0.8 && g > 0.5 && g < 0.85 && b < 0.15) {
+        colors[i]     = playerColor.r
+        colors[i + 1] = playerColor.g
+        colors[i + 2] = playerColor.b
+        // keep alpha (colors[i+3]) unchanged
+      }
+    }
+    return colors
   }
 
   /**
@@ -157,7 +196,7 @@ export class PieceRenderer {
    * 5. Apply uniform scale
    * 6. Bake into new template mesh
    */
-  private async loadPieceGLB(url: string, scale: number): Promise<Mesh> {
+  private async loadPieceGLB(url: string, scale: number): Promise<PieceTemplate> {
     const result = await SceneLoader.ImportMeshAsync('', '', url, this.scene)
 
     // Find first mesh with actual geometry (same pattern as tileRenderer)
@@ -258,6 +297,10 @@ export class PieceRenderer {
       if (!m.isDisposed()) m.dispose()
     }
 
-    return template
+    return {
+      mesh: template,
+      originalColors: rawColors ? new Float32Array(rawColors) : null,
+      colorStride: 4,
+    }
   }
 }
