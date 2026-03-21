@@ -429,9 +429,7 @@ function placeTileInstance(scene: Scene, tile: HexTile, template: Mesh): void {
       baseInstance.rotationQuaternion = null
       baseInstance.rotation.copyFromFloats(0, Math.PI / 6, 0)
       baseInstance.scaling.copyFromFloats(1, 1, 1)
-      // Y=-0.22: midpoint between -0.15 (flush/ramp visible) and -0.29 (ramp hidden/tile floats).
-// Inner wall top at 0.065, road surface at ~0.174 — compromise between both extremes.
-baseInstance.position.set(x, -0.22, z)
+      baseInstance.position.set(x, -0.25, z)
     }
   }
 }
