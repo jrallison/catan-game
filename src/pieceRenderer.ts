@@ -35,13 +35,13 @@ import { BoardEdge, BoardGraph } from './boardGraph'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const SETTLEMENT_SCALE = 0.0267  // 15 BU → 0.40 game units
-const CITY_SCALE       = 0.025   // 16 BU → 0.40 game units
+const SETTLEMENT_SCALE = 0.0467  // 15 BU → 0.70 game units (matches clickable disc diameter)
+const CITY_SCALE       = 0.0438  // 16 BU → 0.70 game units
 
 // roads.glb: 31.35 BU long → 1.5 game units → scale = 0.0479
 // width after scale: 9 × 0.0479 = 0.431 game units
 // height after scale: 3.698 × 0.0479 = 0.177 game units
-const ROAD_SCALE       = 0.0479
+const ROAD_SCALE       = 0.059   // 31.35 BU → 1.85 game units (nearly vertex-to-vertex at 1.9)
 
 const PIECE_BASE_Y     = 0.10    // = RING_TOP_Y from hexRing.ts
 
