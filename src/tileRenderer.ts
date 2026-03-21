@@ -429,7 +429,7 @@ function placeTileInstance(scene: Scene, tile: HexTile, template: Mesh): void {
       baseInstance.rotationQuaternion = null
       baseInstance.rotation.copyFromFloats(0, Math.PI / 6, 0)
       baseInstance.scaling.copyFromFloats(1, 1, 1)
-      baseInstance.position.set(x, -0.25, z)
+      baseInstance.position.set(x, -0.24, z)
     }
   }
 }
