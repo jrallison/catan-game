@@ -105,19 +105,25 @@ export class PieceRenderer {
   placeRoad(edgeId: string, edge: BoardEdge, graph: BoardGraph, color: PlayerColor): void {
     if (this.pieces.has(edgeId)) return
 
-    const mesh = this.roadTemplate!.mesh.clone(`road_${edgeId}`)!
-    mesh.setEnabled(true)
-    mesh.isPickable = false
+    // Fresh mesh from template geometry — no vertex colors (roads use solid player color)
+    const tmpl = this.roadTemplate!
+    const mesh = new Mesh(`road_${edgeId}`, this.scene)
+    const vd = new VertexData()
+    vd.positions = tmpl.mesh.getVerticesData(VertexBuffer.PositionKind)
+    vd.normals   = tmpl.mesh.getVerticesData(VertexBuffer.NormalKind)
+    vd.indices   = tmpl.mesh.getIndices()
+    // No vd.colors — solid diffuse material handles coloring
+    vd.applyToMesh(mesh, false)
 
-    // Position at edge midpoint on ring surface
     mesh.position.set(edge.x, PIECE_BASE_Y, edge.z)
+    mesh.isPickable = false
 
     // Rotate to align road's X-axis with the edge direction
     const vA = graph.vertices.get(edge.vertexA)!
     const vB = graph.vertices.get(edge.vertexB)!
     const dx = vB.x - vA.x
     const dz = vB.z - vA.z
-    mesh.rotation.y = -Math.atan2(dz, dx)  // negate for Babylon left-handed coords
+    mesh.rotation.y = -Math.atan2(dz, dx)
 
     const mat = new StandardMaterial(`roadmat_${edgeId}`, this.scene)
     mat.diffuseColor = PLAYER_COLORS[color].clone()
@@ -143,21 +149,26 @@ export class PieceRenderer {
    * with the player's color. Walls and windows keep their original vertex colors.
    */
   private clonePieceTemplate(tmpl: PieceTemplate, name: string, x: number, z: number, color: PlayerColor): Mesh {
-    const mesh = tmpl.mesh.clone(name, null)!
-    mesh.setEnabled(true)
-    mesh.isPickable = false
-    mesh.position.set(x, PIECE_BASE_Y, z)
+    // Create a fresh mesh from VertexData instead of clone+makeGeometryUnique.
+    // clone() shares non-updatable buffers; setVerticesData on them silently fails.
+    const mesh = new Mesh(name, this.scene)
 
-    // Apply per-piece vertex colors with player-colored roof
+    const vd = new VertexData()
+    vd.positions = tmpl.mesh.getVerticesData(VertexBuffer.PositionKind)
+    vd.normals   = tmpl.mesh.getVerticesData(VertexBuffer.NormalKind)
+    vd.indices   = tmpl.mesh.getIndices()
+
+    // Tint roof zone to player color; keep walls (green) and windows (gray) as-is
     if (tmpl.originalColors) {
-      const tinted = this.tintRoofColor(tmpl.originalColors, PLAYER_COLORS[color])
-      mesh.makeGeometryUnique()
-      mesh.setVerticesData(VertexBuffer.ColorKind, tinted)
+      vd.colors = Array.from(this.tintRoofColor(tmpl.originalColors, PLAYER_COLORS[color]))
     }
 
-    // Material: white diffuse so vertex colors show through; NO player color override
+    vd.applyToMesh(mesh, false)
+    mesh.position.set(x, PIECE_BASE_Y, z)
+    mesh.isPickable = false
+
     const mat = new StandardMaterial(`piecemat_${name}`, this.scene)
-    mat.diffuseColor = Color3.White()
+    mat.diffuseColor = Color3.White()  // vertex colors render unmodified
     mat.specularColor = Color3.Black()
     mat.backFaceCulling = true
     mesh.material = mat
