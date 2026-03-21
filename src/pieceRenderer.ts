@@ -35,7 +35,7 @@ import { BoardEdge, BoardGraph } from './boardGraph'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const SETTLEMENT_SCALE = 0.0467  // 15 BU → 0.70 game units (matches clickable disc diameter)
+const SETTLEMENT_SCALE = 0.0374  // 15 BU → 0.56 game units (80% of city size for clear distinction)
 const CITY_SCALE       = 0.0438  // 16 BU → 0.70 game units
 
 // roads.glb: 31.35 BU long → 1.5 game units → scale = 0.0479
