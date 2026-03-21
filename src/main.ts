@@ -128,6 +128,17 @@ async function main(): Promise<void> {
       const v = graph.vertices.get(vid)
       if (v) pieceRenderer.upgradeToCity(vid, v.x, v.z, color)
     }
+
+    // Place road 3D models
+    for (const player of state.players) {
+      for (const eid of player.roads) {
+        if (!pieceRenderer.hasPiece(eid)) {
+          const edge = graph.edges.get(eid)!
+          pieceRenderer.placeRoad(eid, edge, graph, player.color)
+        }
+        overlay.setEdgeState(eid, 'road-placed')
+      }
+    }
   }
 
   function applyGameState(): void {
@@ -148,8 +159,7 @@ async function main(): Promise<void> {
         for (const [id] of graph.edges) {
           const isOccupied = state.players.some(p => p.roads.includes(id))
           if (isOccupied) {
-            const owner = state.players.find(p => p.roads.includes(id))!
-            overlay.setEdgeState(id, `player-${owner.color}`)
+            overlay.setEdgeState(id, 'road-placed')
           } else {
             overlay.setEdgeState(id, 'invalid')
           }
@@ -168,8 +178,7 @@ async function main(): Promise<void> {
         for (const [id] of graph.edges) {
           const isOccupied = state.players.some(p => p.roads.includes(id))
           if (isOccupied) {
-            const owner = state.players.find(p => p.roads.includes(id))!
-            overlay.setEdgeState(id, `player-${owner.color}`)
+            overlay.setEdgeState(id, 'road-placed')
           } else {
             overlay.setEdgeState(id, valid.has(id) ? 'valid' : 'invalid')
           }
@@ -209,7 +218,7 @@ async function main(): Promise<void> {
       for (const [id] of graph.edges) {
         const roadOwner = state.players.find(p => p.roads.includes(id))
         if (roadOwner) {
-          overlay.setEdgeState(id, `player-${roadOwner.color}`)
+          overlay.setEdgeState(id, 'road-placed')
         } else if (state.buildMode === 'road' && validRoads.has(id)) {
           overlay.setEdgeState(id, 'valid')
         } else {

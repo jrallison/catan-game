@@ -31,11 +31,18 @@ import {
 import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader'
 import '@babylonjs/loaders/glTF'
 import { PlayerColor } from './gameState'
+import { BoardEdge, BoardGraph } from './boardGraph'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const SETTLEMENT_SCALE = 0.0267  // 15 BU → 0.40 game units
 const CITY_SCALE       = 0.025   // 16 BU → 0.40 game units
+
+// roads.glb: 31.35 BU long → 1.5 game units → scale = 0.0479
+// width after scale: 9 × 0.0479 = 0.431 game units
+// height after scale: 3.698 × 0.0479 = 0.177 game units
+const ROAD_SCALE       = 0.0479
+
 const PIECE_BASE_Y     = 0.10    // = RING_TOP_Y from hexRing.ts
 
 const PLAYER_COLORS: Record<PlayerColor, Color3> = {
@@ -49,7 +56,8 @@ export class PieceRenderer {
   private scene: Scene
   private settlementTemplate: Mesh | null = null
   private cityTemplate: Mesh | null = null
-  /** vertexId → placed mesh */
+  private roadTemplate: Mesh | null = null
+  /** vertexId or edgeId → placed mesh */
   private pieces = new Map<string, Mesh>()
 
   constructor(scene: Scene) {
@@ -62,6 +70,9 @@ export class PieceRenderer {
 
     this.cityTemplate = await this.loadPieceGLB('/assets/cities.glb', CITY_SCALE)
     this.cityTemplate.setEnabled(false)
+
+    this.roadTemplate = await this.loadPieceGLB('/assets/roads.glb', ROAD_SCALE)
+    this.roadTemplate.setEnabled(false)
   }
 
   hasPiece(vertexId: string): boolean {
@@ -83,6 +94,32 @@ export class PieceRenderer {
     }
     const mesh = this.cloneTemplate(this.cityTemplate!, `city_${vertexId}`, x, z, color)
     this.pieces.set(vertexId, mesh)
+  }
+
+  placeRoad(edgeId: string, edge: BoardEdge, graph: BoardGraph, color: PlayerColor): void {
+    if (this.pieces.has(edgeId)) return
+
+    const mesh = this.roadTemplate!.clone(`road_${edgeId}`)!
+    mesh.setEnabled(true)
+    mesh.isPickable = false
+
+    // Position at edge midpoint on ring surface
+    mesh.position.set(edge.x, PIECE_BASE_Y, edge.z)
+
+    // Rotate to align road's X-axis with the edge direction
+    const vA = graph.vertices.get(edge.vertexA)!
+    const vB = graph.vertices.get(edge.vertexB)!
+    const dx = vB.x - vA.x
+    const dz = vB.z - vA.z
+    mesh.rotation.y = -Math.atan2(dz, dx)  // negate for Babylon left-handed coords
+
+    const mat = new StandardMaterial(`roadmat_${edgeId}`, this.scene)
+    mat.diffuseColor = PLAYER_COLORS[color].clone()
+    mat.specularColor = Color3.Black()
+    mat.backFaceCulling = true
+    mesh.material = mat
+
+    this.pieces.set(edgeId, mesh)
   }
 
   removePiece(vertexId: string): void {

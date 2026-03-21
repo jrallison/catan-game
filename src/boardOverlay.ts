@@ -45,6 +45,7 @@ export type MarkerState = 'empty' | 'hover' | 'occupied' | 'valid' | 'invalid'
   | 'player-red-city' | 'player-blue-city'
   | 'piece-placed'       // invisible but still pickable for city upgrade
   | 'valid-city'
+  | 'road-placed'        // invisible edge bar but still pickable for adjacency
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,7 @@ function emissiveForState(state: MarkerState): Color3 {
     case 'player-blue-city': return EMISSIVE_BLUE.clone()
     case 'piece-placed':     return Color3.Black()
     case 'valid-city':       return EMISSIVE_GOLD.clone()
+    case 'road-placed':      return Color3.Black()
   }
 }
 
@@ -229,9 +231,19 @@ export function createBoardOverlay(
 
   function setEdgeState(id: string, state: MarkerState): void {
     const mat = edgeMaterials.get(id)
-    if (!mat) return
+    const mesh = edgeMeshes.get(id)
+    if (!mat || !mesh) return
     edgeStates.set(id, state)
     mat.emissiveColor = emissiveForState(state)
+
+    // road-placed: invisible bar but still pickable for adjacency checks
+    if (state === 'road-placed') {
+      mesh.isVisible = false
+      mesh.isPickable = true
+    } else {
+      mesh.isVisible = true
+      mesh.isPickable = true
+    }
   }
 
   // ─── Dispose ───────────────────────────────────────────────────────
