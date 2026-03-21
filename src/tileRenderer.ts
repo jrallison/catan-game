@@ -429,7 +429,9 @@ function placeTileInstance(scene: Scene, tile: HexTile, template: Mesh): void {
       baseInstance.rotationQuaternion = null
       baseInstance.rotation.copyFromFloats(0, Math.PI / 6, 0)
       baseInstance.scaling.copyFromFloats(1, 1, 1)
-      baseInstance.position.set(x, -0.05, z)
+      // Y=-0.21: aligns base outer edge top (Z=6.0 blender × scale 0.057 = 0.342) with
+// terrain tile outer rim (Z=2.4 blender × scale 0.0568 = 0.136). 0.136-0.342=-0.206≈-0.21
+baseInstance.position.set(x, -0.21, z)
     }
   }
 }
