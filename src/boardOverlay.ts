@@ -219,13 +219,18 @@ export function createBoardOverlay(
     const s = scaleForState(state)
     mesh.scaling.set(s, 1, s)  // scale XZ only (diameter), keep Y (height)
 
-    // piece-placed: invisible disc but still pickable (for city upgrade clicks)
+    // piece-placed: invisible but pickable (city upgrade clicks)
+    // valid: visible and pickable (player can click)
+    // everything else (empty, invalid, occupied): visible but NOT pickable (no hand cursor)
     if (state === 'piece-placed') {
       mesh.isVisible = false
       mesh.isPickable = true
-    } else {
+    } else if (state === 'valid' || state === 'valid-city') {
       mesh.isVisible = true
       mesh.isPickable = true
+    } else {
+      mesh.isVisible = true
+      mesh.isPickable = false
     }
   }
 
@@ -236,13 +241,18 @@ export function createBoardOverlay(
     edgeStates.set(id, state)
     mat.emissiveColor = emissiveForState(state)
 
-    // road-placed: invisible bar but still pickable for adjacency checks
+    // road-placed: invisible but pickable (adjacency checks)
+    // valid: visible and pickable
+    // everything else: visible but NOT pickable (no hand cursor)
     if (state === 'road-placed') {
       mesh.isVisible = false
       mesh.isPickable = true
-    } else {
+    } else if (state === 'valid') {
       mesh.isVisible = true
       mesh.isPickable = true
+    } else {
+      mesh.isVisible = true
+      mesh.isPickable = false
     }
   }
 
