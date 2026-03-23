@@ -115,7 +115,8 @@ export async function renderNumberTokens(scene: Scene, tiles: HexTile[]): Promis
       tessellation: 32,
     }, scene)
     topDisc.position.set(posX, posY + TOKEN_HEIGHT / 2 + 0.001, posZ)
-    topDisc.billboardMode = Mesh.BILLBOARDMODE_ALL  // always face the viewer
+    topDisc.rotation.x = -Math.PI / 2  // face up (BILLBOARDMODE_Y preserves this; only Y rotates)
+    topDisc.billboardMode = Mesh.BILLBOARDMODE_Y  // rotate around Y to face viewer, stay flat
 
     const faceMat = new StandardMaterial(`tokenFaceMat_${tile.q}_${tile.r}`, scene)
     faceMat.diffuseTexture = texture

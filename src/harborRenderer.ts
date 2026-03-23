@@ -262,6 +262,6 @@ export async function renderHarbors(scene: Scene, harbors: HarborDef[]): Promise
       0,
       true,
     )
-    topMesh.billboardMode = Mesh.BILLBOARDMODE_ALL
+    topMesh.billboardMode = Mesh.BILLBOARDMODE_Y  // rotate around Y to face viewer, don't tilt
   }
 }
