@@ -11,12 +11,8 @@ import { HexTile } from './types'
 import { axialToWorld } from './board'
 import { DEPRESSION_OFFSET, DEPRESSION_RADIUS } from './tileGeometry'
 
-// TOKEN_CANVAS_ROTATION: compensates for disc UV orientation vs camera.
-// CreateDisc rotation.x=-PI/2 maps texture V to world +Z.
-// Camera at alpha=0, beta=0.3 sees world +Z as screen-right,
-// so canvas text needs -PI/2 pre-rotation to read upright.
-// If camera alpha changes significantly, revisit this value.
-const TOKEN_CANVAS_ROTATION = 0
+// Disc uses BILLBOARDMODE_Y — rotates around Y to face viewer, stays flat on board.
+// Canvas needs no pre-rotation; text reads upright from any camera angle.
 
 // Probability dots for each number
 const PROBABILITY_DOTS: Record<number, number> = {
@@ -76,12 +72,6 @@ export async function renderNumberTokens(scene: Scene, tiles: HexTile[]): Promis
     ctx.fillStyle = '#FFFFFF'
     ctx.fill()
 
-    // Pre-rotate canvas so text reads upright from default camera view
-    ctx.save()
-    ctx.translate(textureSize / 2, textureSize / 2)
-    ctx.rotate(TOKEN_CANVAS_ROTATION)
-    ctx.translate(-textureSize / 2, -textureSize / 2)
-
     // Number text
     const isHighProb = tile.number === 6 || tile.number === 8
     const textColor = isHighProb ? '#C00000' : '#000000'
@@ -105,8 +95,6 @@ export async function renderNumberTokens(scene: Scene, tiles: HexTile[]): Promis
       ctx.arc(dotsStartX + i * dotSpacing, dotsY, dotRadius, 0, Math.PI * 2)
       ctx.fill()
     }
-
-    ctx.restore()
 
     texture.update()
 
