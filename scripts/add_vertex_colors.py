@@ -121,12 +121,12 @@ TILE_PART_COLORS = {
 
     # Harbor pieces
     "harbor_resources": {
-        "harbor_3_for_1": 5,   # gold
-        "harbor_brick":   1,   # orange
-        "harbor_wool":    7,   # white
-        "harbor_wood":    3,   # brown
-        "harbor_ore":     9,   # grey
-        "harbor_wheet":   10,  # yellow
+        "harbor_3_for_1": 7,   # white — generic 3:1 harbor
+        "harbor_brick":   14,  # terracotta — matches brick tiles
+        "harbor_wool":    6,   # light green — matches wool tiles
+        "harbor_wood":    13,  # forest green — matches wood tiles
+        "harbor_ore":     15,  # medium gray — matches ore tiles
+        "harbor_wheet":   16,  # darker gold — matches wheat tiles
     },
     "harbor_base": {
         "harbor_base_-_1": 2,

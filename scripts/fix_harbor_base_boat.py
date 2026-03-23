@@ -95,14 +95,27 @@ def main():
             paint_solid(obj, color)
 
             if stem in BOAT_PARTS:
-                # Set origin to bounding box center, then scale to 50%
+                # Scale to 50% but keep the boat bottom at its original Y
+                # (waterline), so it sits on the water surface instead of
+                # floating in the air.
                 bpy.ops.object.select_all(action="DESELECT")
                 obj.select_set(True)
                 bpy.context.view_layer.objects.active = obj
+
+                # Record original bottom Y (waterline)
+                mesh = obj.data
+                original_min_y = min(v.co.y for v in mesh.vertices)
+
+                # Scale to 50% from bounding-box center
                 bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
                 obj.scale = (0.5, 0.5, 0.5)
                 bpy.ops.object.transform_apply(scale=True)
-                print(f"    → Scaled {stem} to 50%")
+
+                # Restore original bottom Y so boat sits at waterline
+                new_min_y = min(v.co.y for v in obj.data.vertices)
+                obj.location.y += (original_min_y - new_min_y)
+                bpy.ops.object.transform_apply(location=True)
+                print(f"    → Scaled {stem} to 50% (waterline preserved)")
 
             all_objects.append(obj)
 

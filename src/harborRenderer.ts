@@ -232,8 +232,11 @@ export async function renderHarbors(scene: Scene, harbors: HarborDef[]): Promise
     const dz = land.z - water.z
     const dist = Math.sqrt(dx * dx + dz * dz)
     const apothem = 2.6 * Math.sqrt(3) / 2  // ≈ 2.25 — center-to-edge distance
-    const x = water.x + (dx / dist) * apothem
-    const z = water.z + (dz / dist) * apothem
+    // Offset dock center back into the water so its land-facing flat edge
+    // sits flush with the hex boundary between water and land.
+    const DOCK_DEPTH_OFFSET = 1.2
+    const x = water.x + (dx / dist) * (apothem - DOCK_DEPTH_OFFSET)
+    const z = water.z + (dz / dist) * (apothem - DOCK_DEPTH_OFFSET)
 
     // Rotation: dock flat edge faces the land tile (from land toward water)
     const rotation = Math.atan2(dx, dz) + Math.PI / 2
