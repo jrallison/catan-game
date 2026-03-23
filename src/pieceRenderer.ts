@@ -168,7 +168,7 @@ export class PieceRenderer {
     mesh.isPickable = false
 
     const mat = new StandardMaterial(`piecemat_${name}`, this.scene)
-    mat.diffuseColor = Color3.White()  // vertex colors render unmodified
+    mat.diffuseColor = PLAYER_COLORS[color].clone()
     mat.specularColor = Color3.Black()
     mat.backFaceCulling = true
     mesh.material = mat
