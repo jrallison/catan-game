@@ -16,7 +16,7 @@ import { DEPRESSION_OFFSET, DEPRESSION_RADIUS } from './tileGeometry'
 // Camera at alpha=0, beta=0.3 sees world +Z as screen-right,
 // so canvas text needs -PI/2 pre-rotation to read upright.
 // If camera alpha changes significantly, revisit this value.
-const TOKEN_CANVAS_ROTATION = -Math.PI / 2
+const TOKEN_CANVAS_ROTATION = 0
 
 // Probability dots for each number
 const PROBABILITY_DOTS: Record<number, number> = {
