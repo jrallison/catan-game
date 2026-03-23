@@ -34,16 +34,18 @@ for i in range(1, 5):
         xs = [v.co.x for v in bm.verts]
         ys = [v.co.y for v in bm.verts]
         zs = [v.co.z for v in bm.verts]
-        cx = (min(xs) + max(xs)) / 2  # center X
-        cy = max(ys)                  # max Y = dock-adjacent edge (stays fixed)
-        cz = min(zs)                  # min Z = waterline bottom (stays fixed)
+
+        # Scale from CENTER in X and Y — preserves original alongside-dock position
+        cx = (min(xs) + max(xs)) / 2
+        cy = (min(ys) + max(ys)) / 2
+        cz = (min(zs) + max(zs)) / 2  # center Z
 
         for v in bm.verts:
-            v.co.x = cx + (v.co.x - cx) * 0.5  # shrink horizontally toward center
-            v.co.y = cy + (v.co.y - cy) * 0.5  # shrink away from dock
-            v.co.z = cz + (v.co.z - cz) * 0.5  # shrink upward, base stays
+            v.co.x = cx + (v.co.x - cx) * 0.5
+            v.co.y = cy + (v.co.y - cy) * 0.5
+            v.co.z = cz + (v.co.z - cz) * 0.5
 
-        # Translate down so boat Z-bottom = 0 (matches dock base)
+        # Translate down so boat Z-bottom = 0 (dock waterline)
         new_min_z = min(v.co.z for v in bm.verts)
         for v in bm.verts:
             v.co.z -= new_min_z
@@ -51,7 +53,7 @@ for i in range(1, 5):
         bm.to_mesh(mesh)
         bm.free()
         mesh.update()
-        print(f"Part {i}: anchored at cy={cy:.1f} cz={cz:.1f} → translated down by {new_min_z:.2f}")
+        print(f"Part {i}: center=({cx:.1f},{cy:.1f},{cz:.1f}) translated Z down by {new_min_z:.2f}")
 
     objects.append(obj)
 
