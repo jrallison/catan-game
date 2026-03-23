@@ -1,6 +1,7 @@
 import { createScene } from './scene'
-import { createStandardBoard } from './board'
+import { createStandardBoard, HARBOR_DEFS } from './board'
 import { renderTiles } from './tileRenderer'
+import { renderHarbors } from './harborRenderer'
 import { createHexRings } from './hexRing'
 import { renderNumberTokens } from './numberToken'
 import { buildBoardGraph } from './boardGraph'
@@ -27,6 +28,9 @@ async function main(): Promise<void> {
 
   // Create procedural hex rings around each tile
   createHexRings(scene, board)
+
+  // Render harbor structures on water tiles
+  await renderHarbors(scene, HARBOR_DEFS)
 
   // Render number tokens on land tiles
   await renderNumberTokens(scene, board)
