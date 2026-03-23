@@ -195,7 +195,7 @@ function createHarborMesh(
   mesh.position.set(x, y, z)
   mesh.rotation.y = rotationY
   mesh.isPickable = false
-  mesh.renderingGroupId = 1
+  // renderingGroupId left at default (0) — group 1 caused bleed-through over mountains
 
   const mat = new StandardMaterial(`mat_${name}`, scene)
   mat.diffuseColor = Color3.White()
