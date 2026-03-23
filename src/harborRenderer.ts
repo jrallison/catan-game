@@ -32,7 +32,7 @@ import { HarborDef, axialToWorld } from './board'
 const BASE_TARGET_DIAMETER = 3.2
 
 /** Target diameter for resource top mesh. */
-const TOP_TARGET_DIAMETER = 1.8
+const TOP_TARGET_DIAMETER = 0.9
 
 /** Y position for harbor base (same as tile surface). */
 const BASE_Y = 0.0
@@ -236,7 +236,7 @@ export async function renderHarbors(scene: Scene, harbors: HarborDef[]): Promise
     const z = water.z + (dz / dist) * apothem
 
     // Rotation: dock flat edge faces the land tile (from land toward water)
-    const rotation = Math.atan2(dx, dz)
+    const rotation = Math.atan2(dx, dz) + Math.PI / 2
 
     // Base dock structure
     createHarborMesh(
