@@ -37,6 +37,9 @@ const TOP_TARGET_DIAMETER = 1.8
 /** Y position for harbor base (same as tile surface). */
 const BASE_Y = 0.0
 
+/** Height of the flat dock platform surface (tuned constant for resource top placement). */
+const DOCK_PLATFORM_HEIGHT = 0.32
+
 /** GLB path for the dock structure. */
 const HARBOR_BASE_GLB = '/assets/harbor_base.glb'
 
@@ -192,6 +195,7 @@ function createHarborMesh(
   mesh.position.set(x, y, z)
   mesh.rotation.y = rotationY
   mesh.isPickable = false
+  mesh.renderingGroupId = 1
 
   const mat = new StandardMaterial(`mat_${name}`, scene)
   mat.diffuseColor = Color3.White()
@@ -220,9 +224,19 @@ export async function renderHarbors(scene: Scene, harbors: HarborDef[]): Promise
   const topTemplateMap = new Map<string, HarborTemplate>()
   topUrls.forEach((url, i) => topTemplateMap.set(url, topTemplates[i]))
 
-  // Place each harbor
+  // Place each harbor at the water-land edge
   for (const harbor of harbors) {
-    const { x, z } = axialToWorld(harbor.q, harbor.r)
+    const water = axialToWorld(harbor.q, harbor.r)
+    const land = axialToWorld(harbor.landQ, harbor.landR)
+    const dx = land.x - water.x
+    const dz = land.z - water.z
+    const dist = Math.sqrt(dx * dx + dz * dz)
+    const apothem = 2.6 * Math.sqrt(3) / 2  // ≈ 2.25 — center-to-edge distance
+    const x = water.x + (dx / dist) * apothem
+    const z = water.z + (dz / dist) * apothem
+
+    // Rotation: dock flat edge faces the land tile (from land toward water)
+    const rotation = Math.atan2(dx, dz)
 
     // Base dock structure
     createHarborMesh(
@@ -230,19 +244,19 @@ export async function renderHarbors(scene: Scene, harbors: HarborDef[]): Promise
       baseTemplate.mesh,
       `harbor_base_${harbor.q}_${harbor.r}`,
       x, BASE_Y, z,
-      harbor.rotation,
+      rotation,
       true,
     )
 
-    // Resource top — stacked on top of base
+    // Resource top — centered on dock, flat on platform surface
     const topUrl = HARBOR_TOP_GLB[harbor.type]
     const topTemplate = topTemplateMap.get(topUrl)!
     createHarborMesh(
       scene,
       topTemplate.mesh,
       `harbor_top_${harbor.q}_${harbor.r}`,
-      x, BASE_Y + baseTemplate.bakedHeight, z,
-      harbor.rotation,
+      x, BASE_Y + DOCK_PLATFORM_HEIGHT, z,
+      rotation,
       true,
     )
   }

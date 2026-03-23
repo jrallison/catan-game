@@ -74,8 +74,10 @@ export function createStandardBoard(): HexTile[] {
 // ─── Harbor Definitions ──────────────────────────────────────────────────────
 
 export interface HarborDef {
-  q: number
-  r: number
+  q: number      // water tile axial q
+  r: number      // water tile axial r
+  landQ: number  // adjacent land tile q (the tile the dock faces)
+  landR: number  // adjacent land tile r
   type: HarborType
   rotation: number  // Y-axis rotation in radians, facing toward adjacent land
 }
@@ -83,15 +85,15 @@ export interface HarborDef {
 // Standard Catan harbor positions — clockwise from top-right.
 // Rotations computed via atan2(dx, dz) from harbor to midpoint of adjacent land tiles.
 export const HARBOR_DEFS: HarborDef[] = [
-  { q:  3, r: -2, type: 'ore',   rotation: -1.5708 },  // -90°  → faces west
-  { q:  3, r: -3, type: '3:1',   rotation: -1.0472 },  // -60°
-  { q:  1, r: -3, type: '3:1',   rotation: -0.5236 },  // -30°
-  { q: -1, r: -2, type: 'wool',  rotation:  0.5236 },  //  30°
-  { q: -3, r:  0, type: '3:1',   rotation:  1.0472 },  //  60°
-  { q: -3, r:  2, type: 'brick', rotation:  1.5708 },  //  90°  → faces east
-  { q: -1, r:  3, type: '3:1',   rotation:  2.6180 },  // 150°
-  { q:  1, r:  2, type: 'wheat', rotation: -2.6180 },  // -150°
-  { q:  2, r:  1, type: 'wood',  rotation: -2.6180 },  // -150°
+  { q:  3, r: -2, landQ:  2, landR: -1, type: 'ore',   rotation: -1.5708 },
+  { q:  3, r: -3, landQ:  2, landR: -2, type: '3:1',   rotation: -1.0472 },
+  { q:  1, r: -3, landQ:  1, landR: -2, type: '3:1',   rotation: -0.5236 },
+  { q: -1, r: -2, landQ: -1, landR: -1, type: 'wool',  rotation:  0.5236 },
+  { q: -3, r:  0, landQ: -2, landR:  0, type: '3:1',   rotation:  1.0472 },
+  { q: -3, r:  2, landQ: -2, landR:  1, type: 'brick', rotation:  1.5708 },
+  { q: -1, r:  3, landQ:  0, landR:  2, type: '3:1',   rotation:  2.6180 },
+  { q:  1, r:  2, landQ:  1, landR:  1, type: 'wheat', rotation: -2.6180 },
+  { q:  2, r:  1, landQ:  2, landR:  0, type: 'wood',  rotation: -2.6180 },
 ]
 
 // Axial hex coordinate to world position
