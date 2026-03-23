@@ -1,5 +1,6 @@
 import {
   Scene,
+  Mesh,
   MeshBuilder,
   StandardMaterial,
   DynamicTexture,
@@ -113,8 +114,8 @@ export async function renderNumberTokens(scene: Scene, tiles: HexTile[]): Promis
       radius: TOKEN_DIAMETER / 2 * 0.95,
       tessellation: 32,
     }, scene)
-    topDisc.rotation.x = -Math.PI / 2  // face up
     topDisc.position.set(posX, posY + TOKEN_HEIGHT / 2 + 0.001, posZ)
+    topDisc.billboardMode = Mesh.BILLBOARDMODE_ALL  // always face the viewer
 
     const faceMat = new StandardMaterial(`tokenFaceMat_${tile.q}_${tile.r}`, scene)
     faceMat.diffuseTexture = texture

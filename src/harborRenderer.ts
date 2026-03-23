@@ -251,16 +251,17 @@ export async function renderHarbors(scene: Scene, harbors: HarborDef[]): Promise
       true,
     )
 
-    // Resource top — centered on dock, flat on platform surface
+    // Resource top — billboards to always face viewer
     const topUrl = HARBOR_TOP_GLB[harbor.type]
     const topTemplate = topTemplateMap.get(topUrl)!
-    createHarborMesh(
+    const topMesh = createHarborMesh(
       scene,
       topTemplate.mesh,
       `harbor_top_${harbor.q}_${harbor.r}`,
       x, BASE_Y + DOCK_PLATFORM_HEIGHT, z,
-      rotation,
+      0,
       true,
     )
+    topMesh.billboardMode = Mesh.BILLBOARDMODE_ALL
   }
 }
