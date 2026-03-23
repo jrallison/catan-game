@@ -15,6 +15,10 @@ bpy.ops.wm.read_factory_settings(use_empty=True)
 
 objects = []
 for i in range(1, 5):
+    # Skip part 2 — teal water/wave mesh that conflicts with water tile underneath
+    if i == 2:
+        continue
+
     bpy.ops.wm.stl_import(filepath=os.path.join(PARTS_DIR, f"harbor_base_-_{i}.stl"))
     obj = bpy.context.selected_objects[0]
     obj.name = f"part_{i}"

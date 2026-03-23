@@ -16,6 +16,8 @@
 import {
   Scene,
   Mesh,
+  MeshBuilder,
+  DynamicTexture,
   VertexData,
   VertexBuffer,
   StandardMaterial,
@@ -42,6 +44,16 @@ const DOCK_PLATFORM_HEIGHT = 0.32
 
 /** GLB path for the dock structure. */
 const HARBOR_BASE_GLB = '/assets/harbor_base.glb'
+
+/** Label text shown on the DynamicTexture overlay for each harbor type. */
+const HARBOR_LABELS: Record<HarborType, string> = {
+  '3:1': '3:1',
+  ore:   '2:1',
+  wool:  '2:1',
+  brick: '2:1',
+  wheat: '2:1',
+  wood:  '2:1',
+}
 
 /** GLB paths for each harbor resource type. */
 const HARBOR_TOP_GLB: Record<HarborType, string> = {
@@ -263,5 +275,35 @@ export async function renderHarbors(scene: Scene, harbors: HarborDef[]): Promise
       true,
     )
     topMesh.billboardMode = Mesh.BILLBOARDMODE_Y  // rotate around Y to face viewer, don't tilt
+
+    // DynamicTexture label overlay — dark readable number on top of the 3D token
+    const texSize = 256
+    const tex = new DynamicTexture(`harborLabelTex_${harbor.q}_${harbor.r}`, texSize, scene, false)
+    tex.hasAlpha = true
+    const ctx = tex.getContext() as unknown as CanvasRenderingContext2D
+    ctx.clearRect(0, 0, texSize, texSize)
+    ctx.fillStyle = '#1a1a1a'
+    ctx.font = 'bold 140px Arial'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(HARBOR_LABELS[harbor.type], texSize / 2, texSize / 2)
+    tex.update()
+
+    const labelDisc = MeshBuilder.CreateDisc(
+      `harbor_label_${harbor.q}_${harbor.r}`,
+      { radius: TOP_TARGET_DIAMETER / 2 * 0.55, tessellation: 24 },
+      scene,
+    )
+    labelDisc.position.set(x, BASE_Y + DOCK_PLATFORM_HEIGHT + 0.01, z)
+    labelDisc.isPickable = false
+    labelDisc.billboardMode = Mesh.BILLBOARDMODE_Y
+
+    const labelMat = new StandardMaterial(`harborLabelMat_${harbor.q}_${harbor.r}`, scene)
+    labelMat.diffuseTexture = tex
+    labelMat.useAlphaFromDiffuseTexture = true
+    labelMat.emissiveColor = new Color3(0.1, 0.1, 0.1)
+    labelMat.specularColor = Color3.Black()
+    labelMat.backFaceCulling = false
+    labelDisc.material = labelMat
   }
 }
