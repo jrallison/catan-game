@@ -45,15 +45,18 @@ for i in range(1, 5):
             v.co.y = cy + (v.co.y - cy) * 0.5
             v.co.z = cz + (v.co.z - cz) * 0.5
 
-        # Translate down so boat Z-bottom = 0 (dock waterline)
+        # Translate: raise boat slightly above dock base + shift toward dock in X
+        Z_RAISE = 2.0    # Blender units above Z=0 waterline (~0.16 game units)
+        X_TOWARD_DOCK = -3.0  # shift toward dock center in X (~0.24 game units)
         new_min_z = min(v.co.z for v in bm.verts)
         for v in bm.verts:
-            v.co.z -= new_min_z
+            v.co.z -= (new_min_z - Z_RAISE)
+            v.co.x += X_TOWARD_DOCK
 
         bm.to_mesh(mesh)
         bm.free()
         mesh.update()
-        print(f"Part {i}: center=({cx:.1f},{cy:.1f},{cz:.1f}) translated Z down by {new_min_z:.2f}")
+        print(f"Part {i}: raised Z by {Z_RAISE}, shifted X by {X_TOWARD_DOCK}")
 
     objects.append(obj)
 
