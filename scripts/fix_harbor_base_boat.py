@@ -1,15 +1,17 @@
 """
 fix_harbor_base_boat.py — Blender headless script.
 
-Imports all 4 harbor_base STL parts, scales the boat parts (3 + 4) to 50%,
-paints vertex colors (matching add_vertex_colors.py palette), joins, and
-exports as harbor_base.glb.
+Imports all 4 harbor_base STL parts, scales the boat parts (3 + 4) to 50%
+using bmesh vertex-level transform (anchored at bottom-center so the boat
+stays at the waterline and adjacent to the dock), paints vertex colors
+(matching add_vertex_colors.py palette), joins, and exports as harbor_base.glb.
 
 Usage:
     blender --background --python scripts/fix_harbor_base_boat.py
 """
 
 import bpy
+import bmesh
 import os
 
 
@@ -55,6 +57,30 @@ def paint_solid(obj, color):
             ca.data[loop_idx].color = (color[0], color[1], color[2], 1.0)
 
 
+def scale_from_bottom_center(obj, factor=0.5):
+    """Scale mesh vertices directly via bmesh, anchored at bottom-center.
+
+    Anchor = (center X, min Y, center Z) so the boat's waterline stays
+    fixed and it doesn't drift away from the dock.
+    No obj.scale, origin_set, or transform_apply — pure vertex edit.
+    """
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    xs = [v.co.x for v in bm.verts]
+    ys = [v.co.y for v in bm.verts]
+    zs = [v.co.z for v in bm.verts]
+    cx = (min(xs) + max(xs)) / 2
+    cy = min(ys)   # bottom of boat = waterline anchor
+    cz = (min(zs) + max(zs)) / 2
+    for v in bm.verts:
+        v.co.x = cx + (v.co.x - cx) * factor
+        v.co.y = cy + (v.co.y - cy) * factor  # shrinks upward, base stays fixed
+        v.co.z = cz + (v.co.z - cz) * factor
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+
+
 def create_vertex_color_material(name):
     mat = bpy.data.materials.new(name=name)
     mat.use_nodes = True
@@ -95,27 +121,8 @@ def main():
             paint_solid(obj, color)
 
             if stem in BOAT_PARTS:
-                # Scale to 50% but keep the boat bottom at its original Y
-                # (waterline), so it sits on the water surface instead of
-                # floating in the air.
-                bpy.ops.object.select_all(action="DESELECT")
-                obj.select_set(True)
-                bpy.context.view_layer.objects.active = obj
-
-                # Record original bottom Y (waterline)
-                mesh = obj.data
-                original_min_y = min(v.co.y for v in mesh.vertices)
-
-                # Scale to 50% from bounding-box center
-                bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
-                obj.scale = (0.5, 0.5, 0.5)
-                bpy.ops.object.transform_apply(scale=True)
-
-                # Restore original bottom Y so boat sits at waterline
-                new_min_y = min(v.co.y for v in obj.data.vertices)
-                obj.location.y += (original_min_y - new_min_y)
-                bpy.ops.object.transform_apply(location=True)
-                print(f"    → Scaled {stem} to 50% (waterline preserved)")
+                scale_from_bottom_center(obj, factor=0.5)
+                print(f"    → Scaled {stem} to 50% via bmesh (waterline anchored)")
 
             all_objects.append(obj)
 
