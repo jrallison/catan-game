@@ -1,4 +1,4 @@
-import { ResourceType } from './types'
+import { ResourceType, HexTile } from './types'
 
 export type PlayerColor = 'red' | 'blue'
 
@@ -33,7 +33,7 @@ export type InitialPlacementStep =
   | 'place-settlement'
   | 'place-road'
 
-export type TurnPhase = 'roll' | 'build' | 'done'
+export type TurnPhase = 'roll' | 'build' | 'moving-robber' | 'done'
 
 export type BuildMode = 'none' | 'road' | 'settlement' | 'city'
 
@@ -52,11 +52,17 @@ export interface GameState {
   lastRoll: [number, number] | null
   // Build mode
   buildMode: BuildMode
+  // Robber
+  robberQ: number
+  robberR: number
   // Victory
   winner: PlayerColor | null
 }
 
-export function createInitialGameState(): GameState {
+export function createInitialGameState(tiles: HexTile[]): GameState {
+  const desert = tiles.find(t => t.type === 'desert')
+  if (!desert) throw new Error('No desert tile found')
+
   return {
     phase: 'initial-placement',
     players: [
@@ -73,6 +79,8 @@ export function createInitialGameState(): GameState {
     turnPhase: 'roll',
     lastRoll: null,
     buildMode: 'none',
+    robberQ: desert.q,
+    robberR: desert.r,
     winner: null,
   }
 }

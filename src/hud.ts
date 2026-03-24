@@ -235,17 +235,28 @@ export function createHud(opts: {
         rollBtn.disabled = false
         endTurnBtn.style.display = 'none'
         buildPanel.style.display = 'none'
+        statusBar.style.display = 'none'
+      } else if (state.turnPhase === 'moving-robber') {
+        rollBtn.style.display = 'inline-block'
+        rollBtn.style.opacity = '0.4'
+        rollBtn.disabled = true
+        endTurnBtn.style.display = 'none'
+        buildPanel.style.display = 'none'
+        statusBar.style.display = 'block'
+        statusBar.textContent = 'Roll was 7 — click a tile to move the robber'
       } else if (state.turnPhase === 'build') {
         rollBtn.style.display = 'inline-block'
         rollBtn.style.opacity = '0.4'
         rollBtn.disabled = true
         endTurnBtn.style.display = 'inline-block'
         buildPanel.style.display = 'flex'
+        statusBar.style.display = 'none'
         updateBuildButtons(state)
       } else {
         rollBtn.style.display = 'none'
         endTurnBtn.style.display = 'none'
         buildPanel.style.display = 'none'
+        statusBar.style.display = 'none'
       }
 
       // Player resource panels

@@ -150,6 +150,31 @@ export function getValidCityUpgrades(state: GameState): string[] {
   return player.settlements
 }
 
+// ─── Robber Helpers ──────────────────────────────────────────────────────────
+
+/** Total number of resource cards in a hand */
+export function totalCards(hand: ResourceHand): number {
+  return hand.wood + hand.brick + hand.ore + hand.wheat + hand.wool
+}
+
+/** Auto-discard half the cards (rounded down) randomly */
+export function autoDiscard(hand: ResourceHand): ResourceHand {
+  const total = totalCards(hand)
+  if (total <= 7) return hand
+  const toDiscard = Math.floor(total / 2)
+  const newHand = { ...hand }
+  let discarded = 0
+  const types: ResourceType[] = ['wood', 'brick', 'ore', 'wheat', 'wool']
+  while (discarded < toDiscard) {
+    const available = types.filter(t => newHand[t] > 0)
+    if (!available.length) break
+    const pick = available[Math.floor(Math.random() * available.length)]
+    newHand[pick]--
+    discarded++
+  }
+  return newHand
+}
+
 // ─── Resource Distribution ────────────────────────────────────────────────────
 
 /** TileType → ResourceType mapping */
@@ -181,6 +206,10 @@ export function distributeResources(
     if (tokenValue !== roll) continue
 
     const [q, r] = tileKey.split(',').map(Number)
+
+    // Robber blocks resource production on its tile
+    if (q === state.robberQ && r === state.robberR) continue
+
     const tile = board.find(t => t.q === q && t.r === r)
     if (!tile) continue
     const resource = TILE_RESOURCE[tile.type]

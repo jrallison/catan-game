@@ -1,5 +1,13 @@
+import {
+  MeshBuilder,
+  StandardMaterial,
+  Color3,
+  ActionManager,
+  ExecuteCodeAction,
+  Mesh as BjsMesh,
+} from '@babylonjs/core'
 import { createScene } from './scene'
-import { createStandardBoard, HARBOR_DEFS } from './board'
+import { createStandardBoard, HARBOR_DEFS, axialToWorld } from './board'
 import { renderTiles } from './tileRenderer'
 import { renderHarbors } from './harborRenderer'
 import { createHexRings } from './hexRing'
@@ -11,10 +19,28 @@ import {
   getValidSettlementPlacements, getValidRoadPlacements, placeSettlement, placeRoad,
   distributeResources, BUILD_COSTS, deductCost,
   getValidSettlementBuildLocations, getValidRoadBuildLocations, getValidCityUpgrades,
-  calculateVP,
+  calculateVP, totalCards, autoDiscard,
 } from './gameMechanics'
 import { createHud } from './hud'
 import { PieceRenderer } from './pieceRenderer'
+import { initRobberRenderer, renderRobber } from './robberRenderer'
+import { ResourceType } from './types'
+
+function showToast(message: string, durationMs = 3000): void {
+  const toast = document.createElement('div')
+  toast.textContent = message
+  toast.style.cssText = `
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.85); color: white; padding: 12px 24px;
+    border-radius: 8px; font-family: 'Segoe UI', sans-serif; font-size: 15px;
+    z-index: 300; pointer-events: none; transition: opacity 0.4s;
+  `
+  document.body.appendChild(toast)
+  setTimeout(() => {
+    toast.style.opacity = '0'
+    setTimeout(() => toast.remove(), 400)
+  }, durationMs)
+}
 
 async function main(): Promise<void> {
   const canvas = document.getElementById('renderCanvas') as HTMLCanvasElement
@@ -52,8 +78,140 @@ async function main(): Promise<void> {
   const pieceRenderer = new PieceRenderer(scene)
   await pieceRenderer.loadTemplates()
 
+  // ─── Robber renderer ───────────────────────────────────────────────
+  await initRobberRenderer(scene)
+
   // ─── Game state ────────────────────────────────────────────────────
-  let state: GameState = createInitialGameState()
+  let state: GameState = createInitialGameState(board)
+
+  // Render robber at initial position (desert)
+  renderRobber(state.robberQ, state.robberR)
+
+  // ─── Tile click discs for robber placement ────────────────────────
+  // Clickable discs at land tile centers, shown only during moving-robber phase
+  const landTiles = board.filter(t => t.type !== 'water' && t.type !== 'harbor_water')
+  const tileDiscs = new Map<string, BjsMesh>()
+  const tileMats = new Map<string, StandardMaterial>()
+
+  for (const tile of landTiles) {
+    const key = `${tile.q},${tile.r}`
+    const world = axialToWorld(tile.q, tile.r)
+    const disc = MeshBuilder.CreateCylinder(`tileDisc_${key}`, {
+      diameter: 2.0,
+      height: 0.06,
+      tessellation: 24,
+    }, scene)
+    disc.position.set(world.x, 0.16, world.z)
+
+    const mat = new StandardMaterial(`tileDiscMat_${key}`, scene)
+    mat.diffuseColor = Color3.Black()
+    mat.emissiveColor = new Color3(1.0, 0.7, 0.0) // orange
+    mat.specularColor = Color3.Black()
+    mat.backFaceCulling = true
+    mat.alpha = 1.0
+    disc.material = mat
+
+    disc.isVisible = false
+    disc.isPickable = false
+
+    disc.actionManager = new ActionManager(scene)
+    disc.actionManager.registerAction(
+      new ExecuteCodeAction(ActionManager.OnPointerOverTrigger, () => {
+        mat.emissiveColor = new Color3(1.0, 1.0, 0.2) // bright yellow on hover
+      })
+    )
+    disc.actionManager.registerAction(
+      new ExecuteCodeAction(ActionManager.OnPointerOutTrigger, () => {
+        mat.emissiveColor = new Color3(1.0, 0.7, 0.0) // back to orange
+      })
+    )
+    disc.actionManager.registerAction(
+      new ExecuteCodeAction(ActionManager.OnPickTrigger, () => {
+        handleTileClick(tile.q, tile.r)
+      })
+    )
+
+    tileDiscs.set(key, disc)
+    tileMats.set(key, mat)
+  }
+
+  function showTileOverlay(): void {
+    for (const tile of landTiles) {
+      const key = `${tile.q},${tile.r}`
+      const disc = tileDiscs.get(key)
+      if (!disc) continue
+      // Show all land tiles except current robber tile
+      const isCurrentRobber = tile.q === state.robberQ && tile.r === state.robberR
+      disc.isVisible = !isCurrentRobber
+      disc.isPickable = !isCurrentRobber
+    }
+  }
+
+  function hideTileOverlay(): void {
+    for (const disc of tileDiscs.values()) {
+      disc.isVisible = false
+      disc.isPickable = false
+    }
+  }
+
+  function handleTileClick(q: number, r: number): void {
+    if (state.turnPhase !== 'moving-robber') return
+    if (q === state.robberQ && r === state.robberR) return
+
+    // Move robber
+    state = { ...state, robberQ: q, robberR: r }
+    renderRobber(q, r)
+
+    // Steal check: find opponents with settlements/cities on this tile
+    const tileKey = `${q},${r}`
+    const currentPlayer = state.players[state.currentPlayerIndex]
+    const opponents: number[] = []
+
+    for (const [vertexId, vertex] of graph.vertices) {
+      if (!vertex.adjacentTiles.includes(tileKey)) continue
+      for (let i = 0; i < state.players.length; i++) {
+        if (i === state.currentPlayerIndex) continue
+        const p = state.players[i]
+        if (p.settlements.includes(vertexId) || p.cities.includes(vertexId)) {
+          if (!opponents.includes(i)) opponents.push(i)
+        }
+      }
+    }
+
+    if (opponents.length > 0) {
+      // Pick a random opponent
+      const victimIdx = opponents[Math.floor(Math.random() * opponents.length)]
+      const victim = state.players[victimIdx]
+      const types: ResourceType[] = ['wood', 'brick', 'ore', 'wheat', 'wool']
+      const available = types.filter(t => victim.hand[t] > 0)
+
+      if (available.length > 0) {
+        const stolen = available[Math.floor(Math.random() * available.length)]
+        state = {
+          ...state,
+          players: state.players.map((p, i) => {
+            if (i === victimIdx) {
+              return { ...p, hand: { ...p.hand, [stolen]: p.hand[stolen] - 1 } }
+            }
+            if (i === state.currentPlayerIndex) {
+              return { ...p, hand: { ...p.hand, [stolen]: p.hand[stolen] + 1 } }
+            }
+            return p
+          }),
+        }
+        showToast(`You stole ${stolen} from ${victim.color}!`)
+      } else {
+        showToast(`${victim.color} had no resources to steal`)
+      }
+    } else {
+      showToast('No opponents on this tile')
+    }
+
+    // Transition to build phase
+    state = { ...state, turnPhase: 'build' }
+    hideTileOverlay()
+    applyGameState()
+  }
 
   function checkWin(): void {
     for (const player of state.players) {
@@ -70,6 +228,26 @@ async function main(): Promise<void> {
     const d1 = Math.ceil(Math.random() * 6)
     const d2 = Math.ceil(Math.random() * 6)
     const roll = d1 + d2
+
+    if (roll === 7) {
+      // Auto-discard for players with > 7 cards
+      const updatedPlayers = state.players.map(p =>
+        totalCards(p.hand) > 7
+          ? { ...p, hand: autoDiscard(p.hand) }
+          : p
+      )
+      state = {
+        ...state,
+        lastRoll: [d1, d2],
+        players: updatedPlayers,
+        turnPhase: 'moving-robber',
+      }
+      hud.showDiceResult([d1, d2])
+      showToast('Roll was 7 — move the robber')
+      applyGameState()
+      return
+    }
+
     state = {
       ...state,
       lastRoll: [d1, d2],
@@ -190,7 +368,22 @@ async function main(): Promise<void> {
       }
     }
 
-    if (state.phase === 'main-game') {
+    if (state.phase === 'main-game' && state.turnPhase === 'moving-robber') {
+      // During moving-robber, hide vertex/edge overlays and show tile discs
+      for (const [id] of graph.vertices) {
+        const isOccupied = state.players.some(p => p.settlements.includes(id) || p.cities.includes(id))
+        overlay.setVertexState(id, isOccupied ? 'piece-placed' : 'invalid')
+      }
+      for (const [id] of graph.edges) {
+        const isOccupied = state.players.some(p => p.roads.includes(id))
+        overlay.setEdgeState(id, isOccupied ? 'road-placed' : 'invalid')
+      }
+      showTileOverlay()
+    } else {
+      hideTileOverlay()
+    }
+
+    if (state.phase === 'main-game' && state.turnPhase !== 'moving-robber') {
       // Compute valid placements for build mode
       const validSettlements = state.buildMode === 'settlement'
         ? new Set(getValidSettlementBuildLocations(state, graph)) : new Set<string>()
