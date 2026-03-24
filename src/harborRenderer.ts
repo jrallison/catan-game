@@ -31,7 +31,7 @@ import { HarborDef, axialToWorld } from './board'
 /** Target X-width for harbor base (game units). Set to hex edge length (2.6) so the
  *  dock's outer edges align exactly with the two adjacent settlement/city vertex positions.
  *  Scaling uses X extent (not max-extent) so this maps directly to dock width. */
-const BASE_TARGET_DIAMETER = 2.6
+const BASE_TARGET_DIAMETER = 2.08  // 2.6 (hex edge) × 0.8 = 20% smaller, centered on shoreline
 
 /** Target diameter for resource top mesh. */
 const TOP_TARGET_DIAMETER = 0.9
