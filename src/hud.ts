@@ -152,6 +152,7 @@ export function createHud(opts: {
 
   function renderTradeGive(state: GameState): void {
     const player = state.players[state.currentPlayerIndex]
+    console.log('[trade] currentPlayerIndex:', state.currentPlayerIndex, 'hand:', JSON.stringify(player.hand))
     const rates = opts.getTradeRates(state)
     const resources: ResourceType[] = ['wood', 'brick', 'ore', 'wheat', 'wool']
 
