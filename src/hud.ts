@@ -70,7 +70,7 @@ export function createHud(opts: {
   // ─── Build panel ─────────────────────────────────────────────────────
   const buildPanel = document.createElement('div')
   buildPanel.style.cssText = `
-    display: none; padding: 6px 16px 8px;
+    display: none; padding: 6px 16px 8px; flex-wrap: wrap; gap: 6px;
     border-bottom: 1px solid rgba(255,255,255,0.15);
   `
   container.appendChild(buildPanel)
