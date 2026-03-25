@@ -385,8 +385,8 @@ export function createHud(opts: {
         buildPanel.style.display = 'flex'
         statusBar.style.display = 'none'
         updateBuildButtons(state)
-        // Show trade button only for human player (player 0)
-        tradeBtn.style.display = state.currentPlayerIndex === 0 ? 'inline-block' : 'none'
+        // Show trade button for all players (both human in hotseat mode)
+        tradeBtn.style.display = 'inline-block'
         // Update trade panel if open
         if (tradeStep === 'give') {
           tradePanel.style.display = 'block'

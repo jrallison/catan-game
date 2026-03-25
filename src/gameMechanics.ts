@@ -193,9 +193,12 @@ export function getTradeRates(
   const occupied = new Set([...player.settlements, ...player.cities])
 
   for (const harbor of harborDefs) {
-    const tileKey = `${harbor.landQ},${harbor.landR}`
+    const landKey = `${harbor.landQ},${harbor.landR}`
+    const harborKey = `${harbor.q},${harbor.r}`
     for (const [vid, vertex] of graph.vertices) {
-      if (!vertex.adjacentTiles.includes(tileKey)) continue
+      // Must be at the shared edge between the harbor tile and the land tile
+      if (!vertex.adjacentTiles.includes(landKey)) continue
+      if (!vertex.adjacentTiles.includes(harborKey)) continue
       if (!occupied.has(vid)) continue
 
       if (harbor.type === '3:1') {
