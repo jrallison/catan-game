@@ -1,7 +1,7 @@
 import { GameState, Player, ResourceHand } from './gameState'
 import { BoardGraph } from './boardGraph'
 import { TileType, ResourceType } from './types'
-import { createStandardBoard } from './board'
+import { createStandardBoard, HarborDef } from './board'
 
 // ─── Victory Points ───────────────────────────────────────────────────────────
 
@@ -173,6 +173,62 @@ export function autoDiscard(hand: ResourceHand): ResourceHand {
     discarded++
   }
   return newHand
+}
+
+// ─── Trading ─────────────────────────────────────────────────────────────────
+
+/**
+ * Returns the best trade rate for each resource the current player can give.
+ * 4 = bank rate, 3 = any 3:1 harbor, 2 = matching 2:1 harbor.
+ */
+export function getTradeRates(
+  player: Player,
+  graph: BoardGraph,
+  harborDefs: HarborDef[],
+): Record<ResourceType, 2 | 3 | 4> {
+  const rates: Record<ResourceType, 2 | 3 | 4> = {
+    wood: 4, brick: 4, ore: 4, wheat: 4, wool: 4,
+  }
+
+  const occupied = new Set([...player.settlements, ...player.cities])
+
+  for (const harbor of harborDefs) {
+    const tileKey = `${harbor.landQ},${harbor.landR}`
+    for (const [vid, vertex] of graph.vertices) {
+      if (!vertex.adjacentTiles.includes(tileKey)) continue
+      if (!occupied.has(vid)) continue
+
+      if (harbor.type === '3:1') {
+        for (const r of Object.keys(rates) as ResourceType[]) {
+          if (rates[r] > 3) rates[r] = 3
+        }
+      } else {
+        const res = harbor.type as ResourceType
+        rates[res] = 2
+      }
+    }
+  }
+
+  return rates
+}
+
+/** Execute a bank/harbor trade — deduct giveCount of give, gain 1 of receive */
+export function executeTrade(
+  state: GameState,
+  give: ResourceType,
+  giveCount: number,
+  receive: ResourceType,
+): GameState {
+  const player = state.players[state.currentPlayerIndex]
+  if (player.hand[give] < giveCount) return state
+  const newHand = {
+    ...player.hand,
+    [give]: player.hand[give] - giveCount,
+    [receive]: player.hand[receive] + 1,
+  }
+  const players = [...state.players]
+  players[state.currentPlayerIndex] = { ...player, hand: newHand }
+  return { ...state, players }
 }
 
 // ─── Resource Distribution ────────────────────────────────────────────────────

@@ -19,7 +19,7 @@ import {
   getValidSettlementPlacements, getValidRoadPlacements, placeSettlement, placeRoad,
   distributeResources, BUILD_COSTS, deductCost,
   getValidSettlementBuildLocations, getValidRoadBuildLocations, getValidCityUpgrades,
-  calculateVP, totalCards, autoDiscard,
+  calculateVP, totalCards, autoDiscard, getTradeRates, executeTrade,
 } from './gameMechanics'
 import { createHud } from './hud'
 import { PieceRenderer } from './pieceRenderer'
@@ -280,7 +280,21 @@ async function main(): Promise<void> {
     applyGameState()
   }
 
-  const hud = createHud({ onRoll: handleRoll, onEndTurn: handleEndTurn, onBuildMode: handleBuildMode })
+  function handleTrade(give: ResourceType, giveCount: number, receive: ResourceType): void {
+    if (state.phase === 'game-over') return
+    if (state.phase !== 'main-game' || state.turnPhase !== 'build') return
+    state = executeTrade(state, give, giveCount, receive)
+    showToast(`Traded ${giveCount} ${give} → 1 ${receive}`)
+    applyGameState()
+  }
+
+  const hud = createHud({
+    onRoll: handleRoll,
+    onEndTurn: handleEndTurn,
+    onBuildMode: handleBuildMode,
+    onTrade: handleTrade,
+    getTradeRates: (s: GameState) => getTradeRates(s.players[s.currentPlayerIndex], graph, HARBOR_DEFS),
+  })
 
   /** Sync 3D piece meshes to match current game state */
   function syncPieces(): void {

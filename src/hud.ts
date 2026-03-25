@@ -1,5 +1,6 @@
 import { GameState, Player, BuildMode } from './gameState'
 import { BUILD_COSTS, canAfford, calculateVP } from './gameMechanics'
+import { ResourceType } from './types'
 
 const RESOURCE_ICONS: Record<string, string> = {
   wood:  '🪵',
@@ -13,6 +14,8 @@ export function createHud(opts: {
   onRoll: () => void
   onEndTurn: () => void
   onBuildMode: (mode: BuildMode) => void
+  onTrade: (give: ResourceType, giveCount: number, receive: ResourceType) => void
+  getTradeRates: (state: GameState) => Record<ResourceType, 2 | 3 | 4>
 }): {
   update: (state: GameState) => void
   showDiceResult: (dice: [number, number]) => void
@@ -117,6 +120,131 @@ export function createHud(opts: {
     cityBtn.style.background = state.buildMode === 'city' ? activeBg : normalBg
   }
 
+  // ─── Trade button (in build panel) ──────────────────────────────────
+  const tradeBtn = document.createElement('button')
+  tradeBtn.innerHTML = '🔄 Trade'
+  tradeBtn.style.cssText = `
+    background: rgba(255,255,255,0.12); color: white; border: 1px solid rgba(255,255,255,0.2);
+    padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
+    margin-right: 6px; transition: opacity 0.2s, background 0.2s;
+  `
+  buildPanel.appendChild(tradeBtn)
+
+  // ─── Trade panel (give/receive selection) ─────────────────────────
+  const tradePanel = document.createElement('div')
+  tradePanel.style.cssText = `
+    display: none; padding: 8px 16px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+  `
+  container.appendChild(tradePanel)
+
+  let tradeStep: 'closed' | 'give' | 'receive' = 'closed'
+  let tradeGiveResource: ResourceType | null = null
+  let tradeGiveCount = 0
+
+  function closeTrade(): void {
+    tradeStep = 'closed'
+    tradeGiveResource = null
+    tradeGiveCount = 0
+    tradePanel.style.display = 'none'
+  }
+
+  function renderTradeGive(state: GameState): void {
+    const player = state.players[state.currentPlayerIndex]
+    const rates = opts.getTradeRates(state)
+    const resources: ResourceType[] = ['wood', 'brick', 'ore', 'wheat', 'wool']
+
+    tradePanel.innerHTML = ''
+    const label = document.createElement('div')
+    label.textContent = 'Give which resource?'
+    label.style.cssText = 'margin-bottom: 6px; font-size: 13px; color: rgba(255,255,255,0.7);'
+    tradePanel.appendChild(label)
+
+    const row = document.createElement('div')
+    row.style.cssText = 'display: flex; gap: 6px; flex-wrap: wrap;'
+    tradePanel.appendChild(row)
+
+    for (const res of resources) {
+      const rate = rates[res]
+      const canTrade = player.hand[res] >= rate
+      const btn = document.createElement('button')
+      btn.textContent = `Give ${rate} ${RESOURCE_ICONS[res]} ${res}`
+      btn.style.cssText = `
+        background: rgba(255,255,255,0.12); color: white; border: 1px solid rgba(255,255,255,0.2);
+        padding: 5px 10px; border-radius: 6px; font-size: 12px;
+        cursor: ${canTrade ? 'pointer' : 'default'};
+        opacity: ${canTrade ? '1' : '0.35'};
+      `
+      btn.disabled = !canTrade
+      if (canTrade) {
+        btn.addEventListener('click', () => {
+          tradeGiveResource = res
+          tradeGiveCount = rate
+          tradeStep = 'receive'
+          renderTradeReceive()
+        })
+      }
+      row.appendChild(btn)
+    }
+
+    const cancelBtn = document.createElement('button')
+    cancelBtn.textContent = '✕ Cancel'
+    cancelBtn.style.cssText = `
+      background: rgba(255,60,60,0.25); color: white; border: 1px solid rgba(255,60,60,0.3);
+      padding: 5px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;
+    `
+    cancelBtn.addEventListener('click', closeTrade)
+    row.appendChild(cancelBtn)
+  }
+
+  function renderTradeReceive(): void {
+    const resources: ResourceType[] = ['wood', 'brick', 'ore', 'wheat', 'wool']
+
+    tradePanel.innerHTML = ''
+    const label = document.createElement('div')
+    label.textContent = `Giving ${tradeGiveCount} ${tradeGiveResource} → Receive which?`
+    label.style.cssText = 'margin-bottom: 6px; font-size: 13px; color: rgba(255,255,255,0.7);'
+    tradePanel.appendChild(label)
+
+    const row = document.createElement('div')
+    row.style.cssText = 'display: flex; gap: 6px; flex-wrap: wrap;'
+    tradePanel.appendChild(row)
+
+    for (const res of resources) {
+      if (res === tradeGiveResource) continue
+      const btn = document.createElement('button')
+      btn.textContent = `${RESOURCE_ICONS[res]} ${res}`
+      btn.style.cssText = `
+        background: rgba(255,255,255,0.12); color: white; border: 1px solid rgba(255,255,255,0.2);
+        padding: 5px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;
+      `
+      btn.addEventListener('click', () => {
+        opts.onTrade(tradeGiveResource!, tradeGiveCount, res)
+        closeTrade()
+      })
+      row.appendChild(btn)
+    }
+
+    const cancelBtn = document.createElement('button')
+    cancelBtn.textContent = '✕ Cancel'
+    cancelBtn.style.cssText = `
+      background: rgba(255,60,60,0.25); color: white; border: 1px solid rgba(255,60,60,0.3);
+      padding: 5px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;
+    `
+    cancelBtn.addEventListener('click', closeTrade)
+    row.appendChild(cancelBtn)
+  }
+
+  tradeBtn.addEventListener('click', () => {
+    if (tradeStep === 'closed') {
+      tradeStep = 'give'
+      tradePanel.style.display = 'block'
+      // renderTradeGive will be called from update()
+    } else {
+      closeTrade()
+    }
+  })
+
   // ─── Player panels ──────────────────────────────────────────────────
   const playersRow = document.createElement('div')
   playersRow.style.cssText = `
@@ -212,6 +340,7 @@ export function createHud(opts: {
         diceDisplay.textContent = ''
         playersRow.style.display = 'none'
         statusBar.style.display = 'block'
+        closeTrade()
 
         const action = state.initialPlacementStep === 'place-settlement'
           ? 'Place a settlement'
@@ -236,6 +365,7 @@ export function createHud(opts: {
         endTurnBtn.style.display = 'none'
         buildPanel.style.display = 'none'
         statusBar.style.display = 'none'
+        closeTrade()
       } else if (state.turnPhase === 'moving-robber') {
         rollBtn.style.display = 'inline-block'
         rollBtn.style.opacity = '0.4'
@@ -244,6 +374,7 @@ export function createHud(opts: {
         buildPanel.style.display = 'none'
         statusBar.style.display = 'block'
         statusBar.textContent = 'Roll was 7 — click a tile to move the robber'
+        closeTrade()
       } else if (state.turnPhase === 'build') {
         rollBtn.style.display = 'inline-block'
         rollBtn.style.opacity = '0.4'
@@ -252,6 +383,15 @@ export function createHud(opts: {
         buildPanel.style.display = 'flex'
         statusBar.style.display = 'none'
         updateBuildButtons(state)
+        // Show trade button only for human player (player 0)
+        tradeBtn.style.display = state.currentPlayerIndex === 0 ? 'inline-block' : 'none'
+        // Update trade panel if open
+        if (tradeStep === 'give') {
+          tradePanel.style.display = 'block'
+          renderTradeGive(state)
+        } else if (tradeStep === 'receive') {
+          tradePanel.style.display = 'block'
+        }
       } else {
         rollBtn.style.display = 'none'
         endTurnBtn.style.display = 'none'
