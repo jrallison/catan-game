@@ -141,6 +141,7 @@ export function createHud(opts: {
   let tradeStep: 'closed' | 'give' | 'receive' = 'closed'
   let tradeGiveResource: ResourceType | null = null
   let tradeGiveCount = 0
+  let latestState: GameState | null = null
 
   function closeTrade(): void {
     tradeStep = 'closed'
@@ -236,10 +237,10 @@ export function createHud(opts: {
   }
 
   tradeBtn.addEventListener('click', () => {
-    if (tradeStep === 'closed') {
+    if (tradeStep === 'closed' && latestState) {
       tradeStep = 'give'
       tradePanel.style.display = 'block'
-      // renderTradeGive will be called from update()
+      renderTradeGive(latestState)
     } else {
       closeTrade()
     }
@@ -323,6 +324,7 @@ export function createHud(opts: {
   // ─── Public API ─────────────────────────────────────────────────────
   return {
     update(state: GameState) {
+      latestState = state
       // ─── Game over ─────────────────────────────────────────────
       if (state.phase === 'game-over') {
         container.style.display = 'none'
