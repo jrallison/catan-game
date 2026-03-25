@@ -1,7 +1,7 @@
 import { GameState, Player, ResourceHand } from './gameState'
 import { BoardGraph } from './boardGraph'
 import { TileType, ResourceType } from './types'
-import { createStandardBoard, HarborDef } from './board'
+import { createStandardBoard, HarborDef, axialToWorld } from './board'
 
 // ─── Victory Points ───────────────────────────────────────────────────────────
 
@@ -192,13 +192,21 @@ export function getTradeRates(
 
   const occupied = new Set([...player.settlements, ...player.cities])
 
+  const HEX_SIZE = 2.6
   for (const harbor of harborDefs) {
     const landKey = `${harbor.landQ},${harbor.landR}`
-    const harborKey = `${harbor.q},${harbor.r}`
+    // Harbor water tiles are excluded from boardGraph, so we can't use adjacentTiles
+    // to identify shared-edge vertices. Instead, check geometric proximity:
+    // shared-edge vertices sit at distance ~HEX_SIZE from the harbor tile center,
+    // while other land vertices are at ~HEX_SIZE*sqrt(3) away.
+    const harborWorld = axialToWorld(harbor.q, harbor.r)
+    const SHARED_THRESHOLD = HEX_SIZE * 1.5  // ~3.9; shared ≈ 2.6, non-shared ≈ 4.5
+
     for (const [vid, vertex] of graph.vertices) {
-      // Must be at the shared edge between the harbor tile and the land tile
       if (!vertex.adjacentTiles.includes(landKey)) continue
-      if (!vertex.adjacentTiles.includes(harborKey)) continue
+      const dx = vertex.x - harborWorld.x
+      const dz = vertex.z - harborWorld.z
+      if (Math.sqrt(dx * dx + dz * dz) > SHARED_THRESHOLD) continue
       if (!occupied.has(vid)) continue
 
       if (harbor.type === '3:1') {
