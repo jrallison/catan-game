@@ -68,8 +68,16 @@ function hexCorners(cx: number, cz: number): { x: number; z: number }[] {
 
 // ─── Graph Builder ───────────────────────────────────────────────────────────
 
+/**
+ * WARNING: This graph includes LAND TILES ONLY.
+ * Water and harbor_water tiles are filtered out.
+ * Vertex.adjacentTiles will never contain water/harbor tile keys.
+ * If you need to check harbor proximity, use geometric distance
+ * (see getTradeRates in gameMechanics.ts for example).
+ */
 export function buildBoardGraph(tiles: HexTile[]): BoardGraph {
-  // Filter to land tiles only (settlements/roads don't go on water)
+  // IMPORTANT: Only land tiles — water and harbor_water are excluded entirely.
+  // This means adjacentTiles arrays never reference water/harbor tile keys.
   const landTiles = tiles.filter(t => t.type !== 'water' && t.type !== 'harbor_water')
 
   const vertices = new Map<string, BoardVertex>()

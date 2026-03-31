@@ -1,7 +1,7 @@
 import { GameState, Player, ResourceHand } from './gameState'
 import { BoardGraph } from './boardGraph'
-import { TileType, ResourceType } from './types'
-import { createStandardBoard, HarborDef, axialToWorld } from './board'
+import { TileType, ResourceType, HexTile } from './types'
+import { HarborDef, axialToWorld } from './board'
 
 // ─── Victory Points ───────────────────────────────────────────────────────────
 
@@ -262,11 +262,10 @@ export function distributeResources(
   roll: number,
   state: GameState,
   graph: BoardGraph,
-  numberTokens: Map<string, number>
+  numberTokens: Map<string, number>,
+  board: HexTile[],
 ): GameState {
   if (roll === 7) return state  // robber — skip for now
-
-  const board = createStandardBoard()
   const updatedPlayers = state.players.map(p => ({ ...p, hand: { ...p.hand } }))
 
   for (const [tileKey, tokenValue] of numberTokens) {
